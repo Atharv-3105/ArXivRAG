@@ -1,0 +1,19 @@
+fastapi 
+uvicorn[standard]
+pydantic-settings
+structlog
+httpx 
+python-dotenv
+pymupdf
+rich 
+#-----------Dev Dependencies-------------
+pytest 
+ruff 
+mypy 
+pre-commit
+pytest-asyncio
+
+sqlalchemy 
+asyncpg 
+qdrant-client 
+sentence-transformers 
