@@ -1,65 +1,64 @@
-from qdrant_client import QdrantClient, models 
+from qdrant_client import AsyncQdrantClient
 from qdrant_client.http.exceptions import UnexpectedResponse
+from qdrant_client.http import models 
+
 from src.pipeline.models import ProcessedPaper
 from src.storage.embedder import EmbeddingService 
-import numpy as np 
-from rich.console import Console 
+from src.core.exceptions import IndexError
+import structlog 
 
-
-console = Console()
+logger = structlog.get_logger(__name__)
 
 class VectorStore:
     COLLECTION_NAME = "arxiv_papers_v1"
     
     def __init__(self, url: str = "http://localhost:6333"):
-        self.client = QdrantClient(url = url)
+        self.client = AsyncQdrantClient(url = url, timeout = 30)
         self.embedder = EmbeddingService()
-        self._ensure_collection()
-        
     
-    def _ensure_collection(self):
-        """ 
-            create collection if doesn't exists
-        """
+    async def initialize(self):
         try:
-            self.client.get_collection(self.COLLECTION_NAME)
-        except UnexpectedResponse:
-            self.client.create_collection(
-                collection_name = self.COLLECTION_NAME,
-                vectors_config = models.VectorParams(
-                    size = 384,
-                    distance = models.Distance.COSINE
-                )
-            )
-            console.print("[blue]Created Qdrant collection.[/blue]")
+            await self.client.get_collection(self.COLLECTION_NAME)
+            logger.info("Qdrant collection already exists")
             
-
-    async def upsert_vectors(self, paper_data: ProcessedPaper):
+        except UnexpectedResponse:
+            await self.client.create_collection(
+                collection_name=self.COLLECTION_NAME,
+                vectors_config = models.VectorParams(size = 384, distance = models.Distance.COSINE),
+                optimizers_config = models.OptimizersConfigDiff(default_segment_number=2, indexing_threshold=20000),
+            )
+            
+            logger.info("Created Qdrant collection")
+            
+    
+    async def upsert_vectors(self, paper_data: ProcessedPaper) -> None:
         if not paper_data.chunks:
+            logger.warning("No chunks to index", arxiv_id = paper_data.metadata.arxiv_id)
             return 
         
-        #Step1: Embed content 
+        logger.info("Encoding vectors", chunk_count = len(paper_data.chunks))
         texts = [chunk.content for chunk in paper_data.chunks]
-        vectors = self.embedder._model(texts)
+        vectors = self.embedder.encode(texts)
         
-        #Step2: Prepare payloads
-        payloads = []
-        ids = []
+        if len(vectors) != len(texts):
+            raise IndexError("Embedding dimension mismatch", code = "VECTOR_DIM_ERROR")
         
-        for i, chunk in enumerate(paper_data.chunks):
-            ids.append(chunk.chunk_id)
-            payloads.append({
+        ids = [chunk.chunk_id for chunk in paper_data.chunks]
+        payloads = [
+            {
                 "paper_id": chunk.paper_id,
                 "section": chunk.section_title,
                 "content": chunk.content,
-                "metadata": chunk.metadata 
-            })
-            
-        self.client.upsert(collection_name=self.COLLECTION_NAME, 
-                           points = models.Batch(
-                               ids = ids,
-                               vectors = vectors.tolist(),
-                               payloads = payloads
-                           ))
+                "metadata": chunk.metadata,
+            }
+            for chunk in paper_data.chunks 
+        ]        
         
-        console.print(f"[green] Indexed {len(ids)} vectors to Qdrant.[/green]")
+        try:
+            await self.client.upsert(collection_name= self.COLLECTION_NAME,
+                                     points = models.Batch(ids = ids, vectors = vectors.tolist(), payloads = payloads),
+                                     wait = True)
+            logger.info("vectors upserted successfully", count = len(ids))
+        
+        except Exception as e:
+            raise IndexError(f"Qdrant upsert failed: {e}", code = "VECTOR_UPSERT_ERROR")

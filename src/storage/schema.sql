@@ -19,6 +19,13 @@ CREATE TABLE IF NOT EXISTS paper_chunks(
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS failed_papers(
+    paper_id    VARCHAR(20) NOT NULL REFERENCES papers(arxiv_id) ON DELETE CASCADE,
+    failure_reason TEXT NOT NULL,
+    attempted_at   TIMESTAMPTZ DEFAULT NOW(),
+    retry_count    INT   DEFAULT 0
+);
+
 CREATE INDEX IF NOT EXISTS idx_papers_published  ON papers(published_date DESC);
 CREATE INDEX IF NOT EXISTS idx_chunks_paper_id   ON paper_chunks(paper_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_section    ON paper_chunks(section_title);

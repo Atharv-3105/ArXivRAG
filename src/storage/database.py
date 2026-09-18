@@ -1,13 +1,25 @@
 import os 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, relationship
-from sqlalchemy import Column, String, Text, DateTime, JSON, ForeignKey, text 
-from datetime import datetime 
+from sqlalchemy import Column, String,Integer, Text, DateTime, JSON, ForeignKey, text 
+from sqlalchemy.pool import AsyncAdaptedQueuePool
+import structlog 
 from pathlib import Path 
 
+logger = structlog.get_logger(__name__)
+
+
 DATABASE_URL = os.getenv("DATABASE_URL", "")
-engine = create_async_engine(DATABASE_URL, echo = False)
-AsyncSessionLocal = async_sessionmaker(engine, class_ = AsyncSession, expire_on_commit = False)
+engine = create_async_engine(DATABASE_URL, 
+                             echo = False,
+                             poolclass = AsyncAdaptedQueuePool,
+                             pool_size = 10,
+                             max_overflow = 20,
+                             pool_timeout = 30,
+                             pool_recycle = 1800,
+        )
+
+AsyncSessionLocal = async_sessionmaker(engine, class_ = AsyncSession, expire_on_commit = False, autoflush = False)
 
 class Base(DeclarativeBase):
     pass 
@@ -41,6 +53,13 @@ class PaperChunk(Base):
     created_at = Column(DateTime(timezone=True), server_default=text("NOW()"))
     
     paper = relationship("Paper", back_populates="chunks")
+    
+class FailedPaper(Base):
+    __tablename__ = "failed_papers"
+    arxiv_id = Column(String(20), primary_key=True)
+    failure_reason = Column(Text, nullable = False)
+    attempted_at = Column(DateTime(timezone = True), server_default = text("NOW()"))
+    retry_count = Column(Integer, server_default = text("0"))
 
 async def init_db_schema() -> None:
     schema_path = Path(__file__).resolve().parent.parent.parent / "storage" / "schema.sql"
@@ -52,4 +71,8 @@ async def init_db_schema() -> None:
     async with engine.begin() as conn:
         await conn.execute(text(sql_script))
 
-    print("✅ Database schema initialized & verified (idempotent).")
+    logger.info("Database schema initialized & verified")
+
+async def get_async_session() -> AsyncSession:
+    async with AsyncSessionLocal() as session:
+        yield session

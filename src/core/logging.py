@@ -7,7 +7,7 @@ from starlette.responses import Response
 from starlette.types import ASGIApp
 from src.core.config import settings 
 
-def setup_logging() -> None:
+def setup_logging(debug: bool = False):
     structlog.configure(
         processors = [
             structlog.contextvars.merge_contextvars,
