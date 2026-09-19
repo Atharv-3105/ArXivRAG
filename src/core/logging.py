@@ -18,7 +18,7 @@ def setup_logging(debug: bool = False):
             structlog.processors.format_exc_info,
             structlog.processors.JSONRenderer() if not settings.DEBUG else structlog.dev.ConsoleRenderer(),
         ],
-        wrapper_class = structlog.make_filtering_bound_logger(logging.INFO),
+        wrapper_class = structlog.make_filtering_bound_logger(getattr(logging, settings.LOG_LEVEL)),
         context_class = dict,
         logger_factory = structlog.PrintLoggerFactory(),
         cache_logger_on_first_use = False

@@ -1,5 +1,5 @@
-import logging 
-from fastapi import FastAPI 
+import structlog
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.core.config import settings 
 from src.core.logging import setup_logging, TraceIDMiddleware
@@ -8,7 +8,7 @@ from src.api.routes import health
 def create_app() -> FastAPI:
     
     setup_logging()
-    logger = logging.getLogger("arxiv-project")
+    logger = structlog.get_logger("arxiv-project")
     logger.info("Initializing application", debug = settings.DEBUG)
     
     app = FastAPI(
@@ -22,7 +22,7 @@ def create_app() -> FastAPI:
     app.add_middleware(TraceIDMiddleware)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins = settings.CORS_ORIGIN,
+        allow_origins = settings.CORS_ORIGINS,
         allow_credentials = True,
         allow_methods = ["*"],
         allow_headers = ["*"],
