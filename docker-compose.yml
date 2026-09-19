@@ -1,0 +1,64 @@
+name: arxivmind
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-arxivmind}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      POSTGRES_DB: ${DB_NAME:-arxivmind}
+    ports:
+      # Bound to localhost only. 5433 on the host, because 5432 is often taken by a local Postgres.
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-arxivmind} -d ${DB_NAME:-arxivmind}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  qdrant:
+    # Keep the server in step with the qdrant-client version in uv.lock
+    image: qdrant/qdrant:v1.19.1
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/6333'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  # One-shot ingestion job. Not started by `docker compose up`; run it with:
+  #   docker compose run --rm pipeline
+  pipeline:
+    profiles: ["pipeline"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      # Inside the compose network the hosts are the service names (overrides the .env values,
+      # which point at localhost for running the pipeline from your machine).
+      DATABASE_URL: postgresql+asyncpg://${DB_USER:-arxivmind}:${DB_PASSWORD}@db:5432/${DB_NAME:-arxivmind}
+      QDRANT_URL: http://qdrant:6333
+    depends_on:
+      db:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+      - hf_cache:/models # embedding model is downloaded once, not on every run
+    restart: "no"
+
+volumes:
+  postgres_data:
+  qdrant_storage:
+  hf_cache:
