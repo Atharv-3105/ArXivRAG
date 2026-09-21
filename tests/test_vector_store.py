@@ -31,6 +31,7 @@ def _is_valid_qdrant_id(value) -> bool:
 def store(monkeypatch):
     client = MagicMock()
     client.upsert = AsyncMock()
+    client.delete = AsyncMock()
     client.collection_exists = AsyncMock(return_value=True)
     client.create_collection = AsyncMock()
     monkeypatch.setattr(vector_db, "AsyncQdrantClient", lambda **_: client)
@@ -145,3 +146,40 @@ def test_embedder_returns_empty_array_for_no_input_without_loading_model():
     svc = EmbeddingService()
     assert svc.encode([]).size == 0
     assert svc._model is None
+
+
+# ---------- new in the HTML/math pipeline
+
+
+async def test_chunks_are_embedded_together_with_their_section_path(store, processed):
+    vs, _, embedder = store
+    await vs.upsert_vectors(processed)
+    texts = embedder.encode.call_args.args[0]
+    assert texts == [c.embedding_text for c in processed.chunks]
+    assert all(t.startswith("Introduction\n") for t in texts)  # context first, then the chunk text
+
+
+async def test_payload_records_how_the_paper_was_parsed(store, processed):
+    vs, client, _ = store
+    processed.parse_method = "html"
+    processed.math_fidelity = "latex"
+    await vs.upsert_vectors(processed)
+    meta = client.upsert.await_args.kwargs["points"].payloads[0]["metadata"]
+    assert (meta["parse_method"], meta["math_fidelity"]) == ("html", "latex")
+    assert meta["section_path"] == "Introduction"  # chunk metadata is preserved alongside
+
+
+async def test_delete_paper_filters_on_paper_id(store):
+    vs, client, _ = store
+    await vs.delete_paper("2401.00001v1")
+    selector = client.delete.await_args.kwargs["points_selector"]
+    condition = selector.filter.must[0]
+    assert (condition.key, condition.match.value) == ("paper_id", "2401.00001v1")
+
+
+async def test_delete_failure_is_wrapped_as_index_error(store):
+    vs, client, _ = store
+    client.delete.side_effect = RuntimeError("qdrant down")
+    with pytest.raises(ArxivIndexError) as exc:
+        await vs.delete_paper("2401.00001v1")
+    assert exc.value.code == "VECTOR_DELETE_ERROR"

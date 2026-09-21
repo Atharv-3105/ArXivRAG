@@ -1,5 +1,6 @@
 -- Applied by src/storage/database.py:init_db_schema (the single source of truth for the schema).
 -- Statements are split on ';' by the loader, so do not put ';' inside strings or comments.
+-- Every statement is idempotent: re-running it upgrades an existing database in place.
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
@@ -15,6 +16,12 @@ CREATE TABLE IF NOT EXISTS papers(
     updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- How the paper was parsed. math_fidelity is 'latex' (real LaTeX from arXiv HTML) or 'degraded'
+-- (recovered from PDF glyphs), so downstream agents know how far to trust an equation.
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS parse_method   VARCHAR(16);
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS math_fidelity  VARCHAR(16);
+ALTER TABLE papers ADD COLUMN IF NOT EXISTS parse_stats    JSONB;
+
 CREATE TABLE IF NOT EXISTS paper_chunks(
     chunk_id       VARCHAR(100) PRIMARY KEY,
     paper_id       VARCHAR(30)  NOT NULL REFERENCES papers(arxiv_id) ON DELETE CASCADE,
@@ -22,6 +29,27 @@ CREATE TABLE IF NOT EXISTS paper_chunks(
     content        TEXT         NOT NULL,
     metadata       JSONB,
     created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Display equations as real LaTeX, addressable on their own (inline math stays inside chunk text).
+CREATE TABLE IF NOT EXISTS paper_equations(
+    paper_id      VARCHAR(30)  NOT NULL REFERENCES papers(arxiv_id) ON DELETE CASCADE,
+    ordinal       INT          NOT NULL,
+    latex         TEXT         NOT NULL,
+    number        VARCHAR(32),
+    display       BOOLEAN      NOT NULL DEFAULT TRUE,
+    section_path  TEXT,
+    anchor        VARCHAR(100),
+    PRIMARY KEY (paper_id, ordinal)
+);
+
+CREATE TABLE IF NOT EXISTS paper_references(
+    paper_id  VARCHAR(30)  NOT NULL REFERENCES papers(arxiv_id) ON DELETE CASCADE,
+    ordinal   INT          NOT NULL,
+    ref_key   VARCHAR(100),
+    text      TEXT         NOT NULL,
+    urls      JSONB,
+    PRIMARY KEY (paper_id, ordinal)
 );
 
 -- Dead-letter queue. Deliberately NO foreign key to papers: a paper that failed

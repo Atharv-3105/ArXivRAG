@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 import structlog
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -55,6 +55,9 @@ class Paper(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("NOW()")
     )
+    parse_method: Mapped[str | None] = mapped_column(String(16))
+    math_fidelity: Mapped[str | None] = mapped_column(String(16))
+    parse_stats: Mapped[dict | None] = mapped_column(JSONB)
 
     chunks = relationship("PaperChunk", back_populates="paper", cascade="all, delete-orphan")
 
@@ -76,6 +79,32 @@ class PaperChunk(Base):
     )
 
     paper = relationship("Paper", back_populates="chunks")
+
+
+class PaperEquation(Base):
+    __tablename__ = "paper_equations"
+
+    paper_id: Mapped[str] = mapped_column(
+        String(30), ForeignKey("papers.arxiv_id", ondelete="CASCADE"), primary_key=True
+    )
+    ordinal: Mapped[int] = mapped_column(Integer, primary_key=True)
+    latex: Mapped[str] = mapped_column(Text, nullable=False)
+    number: Mapped[str | None] = mapped_column(String(32))
+    display: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    section_path: Mapped[str | None] = mapped_column(Text)
+    anchor: Mapped[str | None] = mapped_column(String(100))
+
+
+class PaperReference(Base):
+    __tablename__ = "paper_references"
+
+    paper_id: Mapped[str] = mapped_column(
+        String(30), ForeignKey("papers.arxiv_id", ondelete="CASCADE"), primary_key=True
+    )
+    ordinal: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ref_key: Mapped[str | None] = mapped_column(String(100))
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    urls: Mapped[list | None] = mapped_column(JSONB)
 
 
 class FailedPaper(Base):

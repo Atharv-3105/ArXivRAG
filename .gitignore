@@ -1,0 +1,11 @@
+Docs
+DOCS
+env
+.venv
+__pycache__
+.env
+data/
+*.pdf
+.pytest_cache
+.mypy_cache
+.ruff_cache

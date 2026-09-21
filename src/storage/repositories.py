@@ -1,10 +1,16 @@
 import structlog
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.dialects.postgresql import insert  # the generic insert has no ON CONFLICT
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.pipeline.models import ProcessedPaper
-from src.storage.database import FailedPaper, Paper, PaperChunk
+from src.storage.database import (
+    FailedPaper,
+    Paper,
+    PaperChunk,
+    PaperEquation,
+    PaperReference,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -31,6 +37,9 @@ class PgRepo:
                 published_date=paper_meta.published,
                 pdf_url=paper_meta.pdf_url,
                 categories=paper_meta.categories,
+                parse_method=paper_data.parse_method,
+                math_fidelity=paper_data.math_fidelity,
+                parse_stats=paper_data.parse_stats,
             )
             .on_conflict_do_nothing(index_elements=["arxiv_id"])
         )
@@ -53,6 +62,24 @@ class PgRepo:
         )
         await session.execute(chunk_stmt)
 
+        if paper_data.equations:
+            eq_rows = [
+                {"paper_id": paper_meta.arxiv_id, **eq.model_dump()} for eq in paper_data.equations
+            ]
+            await session.execute(insert(PaperEquation).values(eq_rows).on_conflict_do_nothing())
+        if paper_data.references:
+            ref_rows = [
+                {
+                    "paper_id": paper_meta.arxiv_id,
+                    "ordinal": r.ordinal,
+                    "ref_key": r.key,
+                    "text": r.text,
+                    "urls": r.urls,
+                }
+                for r in paper_data.references
+            ]
+            await session.execute(insert(PaperReference).values(ref_rows).on_conflict_do_nothing())
+
         # Nothing is visible until this commit; any exception above leaves no half-written paper.
         await session.commit()
 
@@ -60,6 +87,12 @@ class PgRepo:
             "Paper & chunks upserted", arxiv_id=paper_meta.arxiv_id, chunk_count=len(chunk_values)
         )
         return True
+
+    async def delete_paper(self, session: AsyncSession, arxiv_id: str) -> None:
+        """Delete a paper; chunks, equations and references go with it (ON DELETE CASCADE)."""
+        await session.execute(delete(Paper).where(Paper.arxiv_id == arxiv_id))
+        await session.commit()
+        logger.info("Paper deleted for re-ingestion", arxiv_id=arxiv_id)
 
     async def log_failure_to_dlq(self, session: AsyncSession, arxiv_id: str, reason: str) -> None:
         """Record a failed ingestion (upsert: repeated failures bump retry_count)."""

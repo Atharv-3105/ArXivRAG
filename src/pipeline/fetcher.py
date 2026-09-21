@@ -148,6 +148,28 @@ class ArxivFetcher:
         )
 
     @_retry_transient
+    async def fetch_html(self, paper: PaperMetadata) -> str | None:
+        """arXiv's LaTeXML rendering of the paper, or None if arXiv has no HTML for it (404).
+
+        The HTML carries the original LaTeX of every formula, which the PDF does not.
+        """
+        url = f"https://arxiv.org/html/{paper.arxiv_id}"
+        logger.info("Fetching HTML", arxiv_id=paper.arxiv_id)
+        async with self._throttled():
+            try:
+                resp = await self._client.get(url)
+                if resp.status_code == 404:
+                    return None
+                resp.raise_for_status()
+            except Exception as e:
+                raise FetchError(
+                    f"HTML fetch failed: {e}",
+                    code="FETCH_HTML_ERROR",
+                    metadata={"arxiv_id": paper.arxiv_id, "retryable": _is_transient(e)},
+                ) from e
+        return resp.text
+
+    @_retry_transient
     async def download_pdf(self, paper: PaperMetadata, save_path: str) -> bool:
         """Download to `<path>.part`, verify it is a PDF, then atomically rename.
 

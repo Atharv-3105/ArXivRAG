@@ -11,6 +11,7 @@ dependencies = [
     "httpx",
     "tenacity",
     "pymupdf",
+    "lxml",
     "sqlalchemy[asyncio]",
     "asyncpg",
     "qdrant-client",
@@ -64,6 +65,10 @@ select = [
     "UP",  # pyupgrade
     "ASYNC", # blocking calls inside async functions
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Fixtures embed HTML/LaTeX strings that are clearer unwrapped; fakes may do blocking file I/O.
+"tests/**" = ["E501", "ASYNC230"]
 
 [tool.mypy]
 python_version = "3.12"

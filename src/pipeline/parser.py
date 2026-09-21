@@ -5,6 +5,7 @@ import structlog
 
 from src.core.config import settings
 from src.core.exceptions import ParseError
+from src.pipeline.layout import Block, order_blocks
 from src.pipeline.models import SectionContent
 
 logger = structlog.get_logger(__name__)
@@ -94,7 +95,7 @@ class PDFParser:
         try:
             metrics.total_pages = len(doc)
             for page_no, page in enumerate(doc.pages(), start=1):
-                text = _clean_text(page.get_text())
+                text = _clean_text(self._page_text(page))
                 metrics.total_words += len(text.split())
                 metrics.latex_block_count += text.count("\\begin{")
                 lines.extend((line, page_no) for line in text.split("\n"))
@@ -120,6 +121,12 @@ class PDFParser:
         metrics.is_valid = True
         logger.info("Parse validation passed", metrics=vars(metrics))
         return sections, metrics
+
+    @staticmethod
+    def _page_text(page: pymupdf.Page) -> str:
+        """Page text in reading order (left column, then right column, within full-width bands)."""
+        blocks = [Block(b[0], b[1], b[2], b[3], b[4]) for b in page.get_text("blocks") if b[6] == 0]
+        return "\n".join(b.text for b in order_blocks(blocks, page.rect.width))
 
     def _split_into_sections(self, lines: list[tuple[str, int]]) -> list[SectionContent]:
         sections: list[SectionContent] = []

@@ -43,7 +43,9 @@ class Settings(BaseSettings):
     ARXIV_REQUEST_DELAY_SECONDS: float = Field(
         default=3.0, description="Pause between arXiv requests (arXiv asks for ~1 per 3s)"
     )
-    PDF_DIR: str = Field(default="data/papers")
+    CACHE_DIR: str = Field(
+        default="data", description="Downloaded HTML/PDF live in <dir>/html, pdf"
+    )
 
     # Parsing / chunking
     PARSE_MIN_WORDS: int = Field(default=800)

@@ -162,11 +162,9 @@ def test_control_characters_are_stripped_from_extracted_text():
 
 
 def test_parsed_sections_never_contain_nul_bytes(parser, tmp_path, monkeypatch):
-    import pymupdf
-
-    real_get_text = pymupdf.Page.get_text
+    real_page_text = PDFParser._page_text
     monkeypatch.setattr(
-        pymupdf.Page, "get_text", lambda self, *a, **k: real_get_text(self, *a, **k) + "\x00"
+        PDFParser, "_page_text", staticmethod(lambda page: real_page_text(page) + "\x00")
     )
     sections, _ = parser.parse(str(_structured_paper(tmp_path / "p.pdf")))
     assert all("\x00" not in s.text for s in sections)

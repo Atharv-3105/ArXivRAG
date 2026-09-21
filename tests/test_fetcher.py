@@ -158,6 +158,33 @@ async def test_malformed_xml_raises_fetch_error(make_fetcher):
         await fetcher.fetch_papers("all:x")
 
 
+async def test_fetch_html_returns_the_page(make_fetcher, make_paper):
+    fetcher, calls = make_fetcher(httpx.Response(200, text="<html>ltx_document</html>"))
+    assert await fetcher.fetch_html(make_paper("2401.00001v1")) == "<html>ltx_document</html>"
+    assert str(calls.requests[0].url) == "https://arxiv.org/html/2401.00001v1"
+
+
+async def test_fetch_html_returns_none_when_arxiv_has_no_html(make_fetcher, make_paper):
+    """404 is an answer ('no HTML for this paper'), not an error, and is not retried."""
+    fetcher, calls = make_fetcher(httpx.Response(404))
+    assert await fetcher.fetch_html(make_paper()) is None
+    assert len(calls.requests) == 1
+
+
+async def test_fetch_html_retries_transient_errors(make_fetcher, make_paper):
+    fetcher, calls = make_fetcher(httpx.Response(503), httpx.Response(200, text="<html/>"))
+    assert await fetcher.fetch_html(make_paper()) == "<html/>"
+    assert len(calls.requests) == 2
+
+
+async def test_fetch_html_persistent_failure_raises_fetch_error(make_fetcher, make_paper):
+    fetcher, calls = make_fetcher(httpx.Response(503))
+    with pytest.raises(FetchError) as exc:
+        await fetcher.fetch_html(make_paper())
+    assert exc.value.code == "FETCH_HTML_ERROR"
+    assert 1 < len(calls.requests) <= 3
+
+
 # ---------- PDF download ----------
 
 

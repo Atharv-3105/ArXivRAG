@@ -43,7 +43,8 @@ class VectorStore:
             return
 
         logger.info("Encoding vectors", chunk_count=len(paper_data.chunks))
-        texts = [chunk.content for chunk in paper_data.chunks]
+        # The section path is embedded with the text so a chunk "knows" where it lives.
+        texts = [chunk.embedding_text for chunk in paper_data.chunks]
         # Embedding is CPU-bound; keep it off the event loop.
         vectors = await asyncio.to_thread(self.embedder.encode, texts)
 
@@ -58,7 +59,11 @@ class VectorStore:
                 "paper_id": chunk.paper_id,
                 "section": chunk.section_title,
                 "content": chunk.content,
-                "metadata": chunk.metadata,
+                "metadata": {
+                    **chunk.metadata,
+                    "parse_method": paper_data.parse_method,
+                    "math_fidelity": paper_data.math_fidelity,
+                },
             }
             for chunk in paper_data.chunks
         ]
@@ -72,6 +77,25 @@ class VectorStore:
             logger.info("Vectors upserted", count=len(ids))
         except Exception as e:
             raise IndexError(f"Qdrant upsert failed: {e}", code="VECTOR_UPSERT_ERROR") from e
+
+    async def delete_paper(self, arxiv_id: str) -> None:
+        """Remove every vector of one paper (used when re-ingesting it with a better parse)."""
+        try:
+            await self.client.delete(
+                collection_name=self.collection,
+                points_selector=models.FilterSelector(
+                    filter=models.Filter(
+                        must=[
+                            models.FieldCondition(
+                                key="paper_id", match=models.MatchValue(value=arxiv_id)
+                            )
+                        ]
+                    )
+                ),
+                wait=True,
+            )
+        except Exception as e:
+            raise IndexError(f"Qdrant delete failed: {e}", code="VECTOR_DELETE_ERROR") from e
 
     async def close(self) -> None:
         await self.client.close()
