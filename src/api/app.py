@@ -1,41 +1,61 @@
+import os
+from contextlib import asynccontextmanager
+
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.core.config import settings 
-from src.core.logging import setup_logging, TraceIDMiddleware
-from src.api.routes import health
 
-def create_app() -> FastAPI:
-    
+from src.api.errors import install_error_handlers
+from src.api.routes import chat, health
+from src.api.services import Services, create_services
+from src.core.config import settings
+from src.core.logging import TraceIDMiddleware, setup_logging
+
+
+def create_app(services: Services | None = None) -> FastAPI:
+    """`services` lets tests inject fakes; production builds them in the lifespan."""
     setup_logging()
     logger = structlog.get_logger("arxiv-project")
-    logger.info("Initializing application", debug = settings.DEBUG)
-    
+    logger.info("Initializing application", debug=settings.DEBUG)
+
+    if settings.LANGSMITH_TRACING:
+        # Opt-in: traces leave the machine. LangGraph/langsmith read these env vars.
+        os.environ.setdefault("LANGSMITH_TRACING", "true")
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        owned = services is None
+        app.state.services = services or await create_services()
+        logger.info("Application ready")
+        try:
+            yield
+        finally:
+            if owned:
+                await app.state.services.aclose()
+
     app = FastAPI(
-        title = settings.APP_NAME,
-        debug = settings.DEBUG,
-        docs_url = "/docs" if settings.DEBUG else None,
-        redoc_url = "/redoc" if settings.DEBUG else None,
+        title=settings.APP_NAME,
+        version=settings.APP_VERSION,
+        debug=settings.DEBUG,
+        docs_url="/docs" if settings.DEBUG else None,
+        redoc_url="/redoc" if settings.DEBUG else None,
+        lifespan=lifespan,
     )
-    
-    #MiddleWare
+
     app.add_middleware(TraceIDMiddleware)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins = settings.CORS_ORIGINS,
-        allow_credentials = True,
-        allow_methods = ["*"],
-        allow_headers = ["*"],
+        allow_origins=settings.CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
-    
-    
-    #Routers
-    app.include_router(health.router, prefix = "/api/v1")
-    app.include_router(health.router)  #Root health for load balancers
-    
-    logger.info("Application Ready")
-    
-    return app 
+    install_error_handlers(app)
+
+    app.include_router(health.router, prefix="/api/v1")
+    app.include_router(health.router)  # root health for load balancers
+    app.include_router(chat.router, prefix="/api/v1")
+    return app
+
 
 app = create_app()
-

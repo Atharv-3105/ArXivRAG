@@ -36,8 +36,8 @@ def current_trace_id() -> str | None:
 class TraceIDMiddleware:
     """Pure ASGI middleware (not BaseHTTPMiddleware) so it works with streaming/SSE responses.
 
-    Takes the caller's X-Trace-ID or mints one, binds it to every log line of the request, and echoes
-    it on the response so a user-reported error can be matched to server logs.
+    Takes the caller's X-Trace-ID or mints one, binds it to every log line of the request, and
+    echoes it on the response so a user-reported error can be matched to server logs.
     """
 
     def __init__(self, app: ASGIApp):

@@ -16,8 +16,9 @@ dependencies = [
     "sqlalchemy[asyncio]",
     "asyncpg",
     "qdrant-client",
-    "sentence-transformers",
-    "torch",  # listed explicitly so [tool.uv.sources] below can pin the CPU-only build on Linux
+    "fastembed",  # dense (bge-small) + BM25 sparse embeddings on ONNX Runtime: no PyTorch
+    "langgraph",
+    "langsmith",  # optional tracing; inert unless LANGSMITH_TRACING=true
 ]
 
 [dependency-groups]
@@ -33,15 +34,6 @@ dev = [
 [tool.uv]
 # This is an application, not a distributable package: install deps only.
 package = false
-
-# Docker/CI run Linux: the default torch wheel there bundles multi-GB CUDA libs we don't use.
-[tool.uv.sources]
-torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

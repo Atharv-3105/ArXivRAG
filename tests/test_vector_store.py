@@ -7,10 +7,11 @@ import numpy as np
 import pytest
 
 from src.core.exceptions import IndexError as ArxivIndexError
+from src.core.exceptions import RetrievalError
 from src.pipeline.chunker import TextChunker
 from src.pipeline.models import ProcessedPaper, SectionContent
 from src.storage import vector_db
-from src.storage.embedder import EmbeddingService
+from src.storage.embedder import EmbeddingService, SparseVector
 from tests.helpers import words
 
 DIM = 384
@@ -27,6 +28,22 @@ def _is_valid_qdrant_id(value) -> bool:
         return False
 
 
+def _collection_info(dense_size: int | None = DIM, sparse: bool = True):
+    """Shape of qdrant's get_collection() response, only the fields VectorStore reads."""
+    from qdrant_client.http import models
+
+    params = MagicMock()
+    params.vectors = (
+        {"dense": models.VectorParams(size=dense_size, distance=models.Distance.COSINE)}
+        if dense_size
+        else models.VectorParams(size=DIM, distance=models.Distance.COSINE)  # old unnamed layout
+    )
+    params.sparse_vectors = {"bm25": models.SparseVectorParams()} if sparse else None
+    info = MagicMock()
+    info.config.params = params
+    return info
+
+
 @pytest.fixture
 def store(monkeypatch):
     client = MagicMock()
@@ -34,10 +51,18 @@ def store(monkeypatch):
     client.delete = AsyncMock()
     client.collection_exists = AsyncMock(return_value=True)
     client.create_collection = AsyncMock()
+    client.create_payload_index = AsyncMock()
+    client.get_collection = AsyncMock(return_value=_collection_info())
+    client.query_points = AsyncMock(return_value=MagicMock(points=[]))
     monkeypatch.setattr(vector_db, "AsyncQdrantClient", lambda **_: client)
 
     embedder = MagicMock()
     embedder.encode.side_effect = lambda texts: np.ones((len(texts), DIM), dtype=np.float32)
+    embedder.encode_sparse.side_effect = lambda texts: (
+        [SparseVector([1, 7], [0.5, 1.0])] * len(texts)
+    )
+    embedder.encode_query.return_value = np.ones(DIM, dtype=np.float32)
+    embedder.encode_sparse_query.return_value = SparseVector([7], [1.0])
     monkeypatch.setattr(vector_db, "EmbeddingService", lambda: embedder)
 
     return vector_db.VectorStore(), client, embedder
@@ -64,8 +89,11 @@ async def test_initialize_creates_collection_when_missing(store):
     client.collection_exists.return_value = False
     await vs.initialize()
     client.create_collection.assert_awaited_once()
-    cfg = client.create_collection.await_args.kwargs["vectors_config"]
-    assert cfg.size == DIM
+    kwargs = client.create_collection.await_args.kwargs
+    assert kwargs["vectors_config"]["dense"].size == DIM
+    assert kwargs["sparse_vectors_config"]["bm25"].modifier.value == "idf"  # IDF applied by Qdrant
+    indexed = {c.kwargs["field_name"] for c in client.create_payload_index.await_args_list}
+    assert {"paper_id", "metadata.math_fidelity"} <= indexed
 
 
 async def test_initialize_is_idempotent_when_collection_exists(store):
@@ -82,7 +110,8 @@ async def test_upsert_sends_one_point_per_chunk_with_provenance(store, processed
     await vs.upsert_vectors(processed)
     points = client.upsert.await_args.kwargs["points"]
     n = len(processed.chunks)
-    assert len(points.ids) == len(points.vectors) == len(points.payloads) == n
+    assert len(points.ids) == len(points.payloads) == n
+    assert len(points.vectors["dense"]) == len(points.vectors["bm25"]) == n
     assert points.payloads[0]["paper_id"] == "2401.00001v1"
     assert points.payloads[0]["section"] == "Introduction"
     assert points.payloads[0]["content"] == processed.chunks[0].content
@@ -183,3 +212,86 @@ async def test_delete_failure_is_wrapped_as_index_error(store):
     with pytest.raises(ArxivIndexError) as exc:
         await vs.delete_paper("2401.00001v1")
     assert exc.value.code == "VECTOR_DELETE_ERROR"
+
+
+# ---------- hybrid layout, schema guard, search
+
+
+@pytest.mark.parametrize(
+    "info",
+    [
+        _collection_info(dense_size=None),  # old dense-only, unnamed vector (v1)
+        _collection_info(sparse=False),  # no BM25
+        _collection_info(dense_size=768),  # different embedding model
+    ],
+)
+async def test_existing_collection_with_another_layout_is_refused(store, info):
+    vs, client, _ = store
+    client.get_collection.return_value = info
+    with pytest.raises(ArxivIndexError) as exc:
+        await vs.initialize()
+    assert exc.value.code == "VECTOR_SCHEMA_MISMATCH"
+    assert "reindex --all" in exc.value.message  # the error says how to fix it
+
+
+async def test_payload_carries_title_so_results_need_no_database_read(store, processed):
+    vs, client, _ = store
+    await vs.upsert_vectors(processed)
+    payload = client.upsert.await_args.kwargs["points"].payloads[0]
+    assert payload["title"] == processed.metadata.title
+    assert payload["published"] == "2024-01-01"
+
+
+async def test_search_fuses_dense_and_bm25_with_rrf(store):
+    from qdrant_client.http import models
+
+    vs, client, _ = store
+    point = MagicMock(id="abc", score=0.5)
+    point.payload = {
+        "paper_id": "2401.00001v1",
+        "title": "T",
+        "section": "Intro",
+        "content": "text",
+        "metadata": {"math_fidelity": "latex"},
+    }
+    client.query_points.return_value = MagicMock(points=[point])
+
+    [hit] = await vs.search("what is LoRA", top_k=4)
+
+    kwargs = client.query_points.await_args.kwargs
+    assert kwargs["query"].fusion == models.Fusion.RRF
+    assert [p.using for p in kwargs["prefetch"]] == ["dense", "bm25"]
+    assert kwargs["limit"] == 4
+    assert (hit.paper_id, hit.title, hit.section, hit.score) == ("2401.00001v1", "T", "Intro", 0.5)
+
+
+async def test_search_can_be_restricted_to_papers(store):
+    vs, client, _ = store
+    await vs.search("q", paper_ids=["2401.00001v1"])
+    for prefetch in client.query_points.await_args.kwargs["prefetch"]:
+        assert prefetch.filter.must[0].match.any == ["2401.00001v1"]
+
+
+async def test_search_failure_is_a_retrieval_error(store):
+    vs, client, _ = store
+    client.query_points.side_effect = RuntimeError("timeout")
+    with pytest.raises(RetrievalError) as exc:
+        await vs.search("q")
+    assert exc.value.code == "VECTOR_SEARCH_ERROR"
+
+
+def test_query_embedding_uses_the_retrieval_instruction(monkeypatch):
+    svc = EmbeddingService()
+    fake = MagicMock()
+    fake.embed.side_effect = lambda texts, **_: [np.ones(DIM)] * len(texts)
+    svc._model = fake
+    vec = svc.encode_query("attention")
+    sent = fake.embed.call_args.args[0][0]
+    assert sent.endswith("attention") and sent.startswith("Represent this sentence")
+    assert abs(np.linalg.norm(vec) - 1.0) < 1e-6  # normalised
+
+
+def test_sparse_encoder_returns_empty_list_without_loading_model():
+    svc = EmbeddingService()
+    assert svc.encode_sparse([]) == []
+    assert svc._sparse is None

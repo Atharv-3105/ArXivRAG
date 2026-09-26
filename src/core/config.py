@@ -38,8 +38,14 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = Field(default="BAAI/bge-small-en-v1.5")
     EMBEDDING_DIM: int = Field(default=384, description="Must match EMBEDDING_MODEL's output size")
     EMBEDDING_BATCH_SIZE: int = Field(default=32)
+    EMBEDDING_QUERY_PREFIX: str = Field(
+        default="Represent this sentence for searching relevant passages: ",
+        description="Prepended to queries only (bge's retrieval instruction); '' disables",
+    )
     SPARSE_MODEL: str = Field(default="Qdrant/bm25", description="Sparse model for hybrid search")
-    MODEL_CACHE_DIR: str | None = Field(default=None, description="Where ONNX models are cached")
+    MODEL_CACHE_DIR: str = Field(
+        default="data/models", description="ONNX model cache (fastembed's default is a temp dir)"
+    )
 
     # ArXiv ingestion
     ARXIV_QUERY: str = Field(
@@ -51,7 +57,9 @@ class Settings(BaseSettings):
     ARXIV_REQUEST_DELAY_SECONDS: float = Field(
         default=3.0, description="Pause between arXiv requests (arXiv asks for ~1 per 3s)"
     )
-    CACHE_DIR: str = Field(default="data", description="Downloaded HTML/PDF live in <dir>/html, pdf")
+    CACHE_DIR: str = Field(
+        default="data", description="Downloaded HTML/PDF live in <dir>/html, pdf"
+    )
 
     # Parsing / chunking
     PARSE_MIN_WORDS: int = Field(default=800)
@@ -62,6 +70,13 @@ class Settings(BaseSettings):
     # Retrieval
     RETRIEVAL_TOP_K: int = Field(default=6, ge=1, le=30)
     RETRIEVAL_PREFETCH: int = Field(default=30, description="Candidates per branch before RRF")
+    RETRIEVAL_MAX_PER_PAPER: int = Field(
+        default=3, ge=1, description="Chunks per paper in one answer's context (diversity)"
+    )
+    CHAT_HISTORY_MESSAGES: int = Field(default=6, description="Past messages sent to the LLM")
+    FOLLOWUP_MAX_WORDS: int = Field(
+        default=12, description="Shorter messages are treated as follow-ups when retrieving"
+    )
     GRAPH_CONTEXT_PAPERS: int = Field(default=3, description="Cited papers added as context")
     GRAPH_MAX_DEPTH: int = Field(default=2, ge=1, le=4)
 
@@ -111,6 +126,9 @@ class Settings(BaseSettings):
     LLM_BREAKER_RECOVERY_SECONDS: float = Field(default=120.0)
     LLM_BREAKER_MAX_RECOVERY_SECONDS: float = Field(default=1800.0)
     LLM_DEFAULT_RETRY_AFTER_SECONDS: float = Field(default=60.0)
+    ROUTER_MIN_CONFIDENCE: float = Field(
+        default=0.6, ge=0, le=1, description="Below this the intent falls back to 'chat'"
+    )
     ROUTER_USE_LLM: bool = Field(
         default=False, description="Rule-based intent router is free; LLM router costs one call"
     )

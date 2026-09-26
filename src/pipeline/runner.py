@@ -136,9 +136,9 @@ async def _process_paper(
                 metrics.skipped += 1
                 logger.info("Already indexed, skipping", arxiv_id=paper.arxiv_id)
                 return
-            chunks = await index_from_store(db_repo, vector_store, paper.arxiv_id)
+            repaired_chunks = await index_from_store(db_repo, vector_store, paper.arxiv_id)
             metrics.repaired += 1
-            metrics.indexed += chunks
+            metrics.indexed += repaired_chunks
             logger.info("Repaired pending paper from Postgres", arxiv_id=paper.arxiv_id)
             return
 

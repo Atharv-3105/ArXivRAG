@@ -99,3 +99,26 @@ CREATE INDEX IF NOT EXISTS idx_papers_title      ON papers USING GIN (title gin_
 CREATE INDEX IF NOT EXISTS idx_papers_base_id    ON papers(base_id);
 CREATE INDEX IF NOT EXISTS idx_papers_index_status ON papers(index_status) WHERE index_status <> 'indexed';
 CREATE INDEX IF NOT EXISTS idx_citations_cited   ON paper_citations(cited_base_id);
+
+-- Chat history (ADR 0007). Owned by us, not by LangGraph's checkpointer: it is queryable (history
+-- UI, GDPR export/delete, eval sampling) and survives restarts of a free-tier host.
+CREATE TABLE IF NOT EXISTS conversations(
+    id          UUID PRIMARY KEY,
+    title       TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS messages(
+    id               BIGSERIAL PRIMARY KEY,
+    conversation_id  UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    role             VARCHAR(16) NOT NULL,
+    content          TEXT NOT NULL,
+    intent           VARCHAR(16),
+    citations        JSONB,
+    provider         VARCHAR(120),
+    trace_id         VARCHAR(128),
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, id);

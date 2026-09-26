@@ -5,6 +5,7 @@ Each phase document ends with the questions it prepares you for, each with the a
 | Topic | Where |
 |---|---|
 | Ingestion, idempotency, dual-store consistency, chunking, embeddings, citation extraction | [Phase 1](phases/phase-1-ingestion.md#5-interview-questions-with-the-answer-you-should-be-able-to-give) |
+| Hybrid retrieval, RRF, LangGraph, SSE streaming, grounding, conversation state | [Phase 2](phases/phase-2-agentic-loop.md#4-interview-questions-with-the-answer-you-should-be-able-to-give) |
 | LLM routing, failover, rate limiting, circuit breakers | [ADR 0004](adr/0004-llm-router.md) (Decision and Alternatives sections) |
 
 ## Cross-cutting

@@ -15,7 +15,10 @@ from src.pipeline.models import PaperMetadata, SectionContent  # noqa: E402
 
 @pytest.fixture(scope="module")
 def client():
-    app = create_app()
+    """App with offline fakes: mock LLM, empty retriever, in-memory history (no Qdrant/Postgres)."""
+    from tests.chat_fakes import make_services
+
+    app = create_app(services=make_services())
     with TestClient(app) as test_client:
         yield test_client
 

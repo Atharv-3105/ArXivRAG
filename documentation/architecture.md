@@ -7,9 +7,10 @@ The plan in `Docs/arxiv_plan.md` is the target. This file describes **what exist
 ```
 Clients          Web UI · CLI                                          (Phase 2+)
                      │ HTTPS, SSE
-API              FastAPI · pure-ASGI trace-id middleware · typed errors → HTTP
+API              FastAPI · /chat, /chat/stream (SSE) · trace-id middleware · typed errors → HTTP
                      │
-Agentic core     LangGraph: router → retrieve → specialist → guardrail  (Phase 2+)
+Agentic core     LangGraph: classify → retrieve (hybrid, RRF) → generate   [ADR 0005]
+                 (specialists: Phase 5, guardrail: Phase 6)
                  LLM router: N free providers, failover, budgets, breakers   [ADR 0004]
                      │
 Data             Postgres 16 ── source of truth: papers, chunks, equations,
@@ -26,7 +27,8 @@ Background       python -m src.pipeline.runner (cron) · reindex (reconciler)  [
 | Chunk text + section path | Postgres `paper_chunks` | pipeline | no |
 | Equations (LaTeX), references | Postgres | pipeline | no |
 | Citation edges | Postgres `paper_citations` | pipeline, in the paper's own transaction | yes, from references |
-| Dense vectors + payload | Qdrant | pipeline / `reindex` | **yes, from Postgres** |
+| Dense + BM25 vectors + payload | Qdrant | pipeline / `reindex` | **yes, from Postgres** |
+| Conversations, messages | Postgres | chat API, best effort | no |
 | Failed papers | Postgres `failed_papers` (DLQ) | pipeline | n/a |
 | Run audit + metrics | Postgres `ingestion_runs` | pipeline | n/a |
 
@@ -36,7 +38,8 @@ Background       python -m src.pipeline.runner (cron) · reindex (reconciler)  [
 |---|---|---|---|
 | Neo4j for the citation graph | Postgres edge table plus recursive CTEs | One free store, atomic with paper writes, and our queries are shallow | [0003](adr/0003-citation-graph-in-postgres.md) |
 | `unstructured` + pdfplumber + Nougat | arXiv HTML (real LaTeX) → PyMuPDF fallback | Exact math without a GPU, measured at 99.54% of formulas verbatim | [0001](adr/0001-html-first-ingestion.md) |
-| BGE-large embeddings | bge-small (384-d), configurable | CPU-only free host, and a model swap is a `reindex --all` | [phase 1](phases/phase-1-ingestion.md) |
+| BGE-large embeddings | bge-small (384-d) on ONNX (fastembed), configurable | CPU-only free host with no PyTorch, and a model swap is a `reindex --all` | [0005](adr/0005-hybrid-retrieval-rrf.md) |
+| LangGraph checkpointing | Stateless graph per turn, history in Postgres tables | Queryable history (UI, GDPR, evals), survives restarts | [0007](adr/0007-conversation-state-in-postgres.md) |
 | Configurable Ollama / OpenAI / Anthropic | A router over free providers (Groq, Gemini, Cerebras, OpenRouter, Ollama) plus optional Anthropic and an offline mock | Free-tier quotas are small, so one provider means downtime | [0004](adr/0004-llm-router.md) |
 
 ## Cross-cutting rules (enforced in code review)
@@ -49,6 +52,6 @@ Background       python -m src.pipeline.runner (cron) · reindex (reconciler)  [
 
 ## Documents
 
-- Phases: [phase 1 — ingestion](phases/phase-1-ingestion.md)
-- ADRs: [0001](adr/0001-html-first-ingestion.md) · [0002](adr/0002-postgres-source-of-truth.md) · [0003](adr/0003-citation-graph-in-postgres.md) · [0004](adr/0004-llm-router.md)
+- Phases: [phase 1 — ingestion](phases/phase-1-ingestion.md) · [phase 2 — agentic loop](phases/phase-2-agentic-loop.md)
+- ADRs: [0001](adr/0001-html-first-ingestion.md) · [0002](adr/0002-postgres-source-of-truth.md) · [0003](adr/0003-citation-graph-in-postgres.md) · [0004](adr/0004-llm-router.md) · [0005](adr/0005-hybrid-retrieval-rrf.md) · [0007](adr/0007-conversation-state-in-postgres.md)
 - [Interview questions](interview_questions.md)
