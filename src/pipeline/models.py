@@ -39,6 +39,15 @@ class Reference(BaseModel):
     urls: list[str] = Field(default_factory=list)
 
 
+class CitationContext(BaseModel):
+    """One in-text citation: the sentence around it and the bibliography keys it points to.
+    HTML tier only (PDF text has no link from "[12]" to a bibliography entry)."""
+
+    keys: list[str]  # Reference.key values, e.g. ["bib.bib12", "bib.bib13"]
+    sentence: str
+    anchor: str | None = None  # id of the enclosing section
+
+
 class SectionContent(BaseModel):
     title: str | None = None
     text: str
@@ -57,6 +66,7 @@ class ParsedDocument(BaseModel):
     sections: list[SectionContent]
     equations: list[Equation] = Field(default_factory=list)
     references: list[Reference] = Field(default_factory=list)
+    citation_contexts: list[CitationContext] = Field(default_factory=list)
     stats: dict = Field(default_factory=dict)
 
 
@@ -79,6 +89,7 @@ class ProcessedPaper(BaseModel):
     chunks: list[Chunk]
     equations: list[Equation] = Field(default_factory=list)
     references: list[Reference] = Field(default_factory=list)
+    citation_contexts: list[CitationContext] = Field(default_factory=list)
     parse_method: ParseMethod = "pdf"
     math_fidelity: MathFidelity = "degraded"
     parse_stats: dict = Field(default_factory=dict)

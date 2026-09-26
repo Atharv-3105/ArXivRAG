@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Citation Graph</title>
+<style>
+  :root { --bg:#fbfaf7; --fg:#1d1d1b; --muted:#6b6a65; --line:#c9c6bd; --node:#3b5b92;
+          --ext:#b8b4aa; --critical:#b3261e; --comparative:#b26a00; --builds_on:#2e7d32; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161614; --fg:#ecebe6; --muted:#9a988f; --line:#4a4944; --node:#7fa3e0;
+            --ext:#5c5a53; --critical:#f28b82; --comparative:#fbbc55; --builds_on:#81c995; }
+  }
+  body { margin:0; font:14px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  header { display:flex; gap:8px; align-items:center; padding:12px 16px; flex-wrap:wrap; }
+  input { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px;
+          background:transparent; color:inherit; min-width:0; flex:1 1 180px; max-width:260px; }
+  button { font:inherit; padding:6px 12px; border-radius:6px; border:1px solid var(--line);
+           background:var(--fg); color:var(--bg); cursor:pointer; }
+  #status { color:var(--muted); }
+  .legend span { margin-right:12px; white-space:nowrap; }
+  .legend i { display:inline-block; width:14px; height:3px; vertical-align:middle; margin-right:4px; }
+  svg { width:100%; height:calc(100vh - 110px); display:block; }
+  text { fill:var(--fg); font-size:10px; pointer-events:none; }
+</style>
+</head>
+<body>
+<header>
+  <input id="paper" placeholder="arXiv id, e.g. 2106.09685v2" aria-label="arXiv id">
+  <select id="depth" aria-label="depth"><option>1</option><option>2</option></select>
+  <button id="go">Show graph</button>
+  <span id="status"></span>
+</header>
+<div class="legend" style="padding:0 16px">
+  <span><i style="background:var(--critical)"></i>critical</span>
+  <span><i style="background:var(--comparative)"></i>comparative</span>
+  <span><i style="background:var(--builds_on)"></i>builds on</span>
+  <span><i style="background:var(--line)"></i>neutral</span>
+  <span>grey node = not in corpus · size = influence</span>
+</div>
+<svg id="graph" role="img" aria-label="citation graph"></svg>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+async function load() {
+  const id = $("paper").value.trim();
+  if (!id) return;
+  $("status").textContent = "Loading…";
+  history.replaceState(null, "", `?paper=${encodeURIComponent(id)}`);
+  const r = await fetch(`/api/v1/papers/${id}/graph?depth=${$("depth").value}`);
+  if (!r.ok) { $("status").textContent = (await r.json()).error?.message || r.statusText; return; }
+  const data = await r.json();
+  $("status").textContent = `${data.nodes.length} papers, ${data.edges.length} citations` +
+    (data.truncated ? " (truncated)" : "");
+  draw(data, id);
+}
+
+function draw({ nodes, edges }, rootId) {
+  const svg = d3.select("#graph"); svg.selectAll("*").remove();
+  const { width, height } = svg.node().getBoundingClientRect();
+  const g = svg.append("g");
+  svg.call(d3.zoom().scaleExtent([0.2, 4]).on("zoom", (e) => g.attr("transform", e.transform)));
+  svg.append("defs").append("marker").attr("id", "arrow").attr("viewBox", "0 -4 8 8")
+    .attr("refX", 14).attr("markerWidth", 6).attr("markerHeight", 6).attr("orient", "auto")
+    .append("path").attr("d", "M0,-4L8,0L0,4").attr("fill", css("--line"));
+  const colour = (f) => css(`--${f}`) || css("--line");
+  const radius = (n) => 5 + Math.sqrt(n.pagerank || 0) * 4 + (n.id === rootId ? 4 : 0);
+
+  const sim = d3.forceSimulation(nodes)
+    .force("link", d3.forceLink(edges).id((d) => d.id).distance(70))
+    .force("charge", d3.forceManyBody().strength(-180))
+    .force("center", d3.forceCenter(width / 2, height / 2))
+    .force("collide", d3.forceCollide().radius((d) => radius(d) + 2));
+
+  const link = g.append("g").selectAll("line").data(edges).join("line")
+    .attr("stroke", (d) => colour(d.function)).attr("stroke-width", 1.5)
+    .attr("marker-end", "url(#arrow)");
+  const node = g.append("g").selectAll("circle").data(nodes).join("circle")
+    .attr("r", radius).attr("fill", (d) => d.in_corpus ? css("--node") : css("--ext"))
+    .attr("stroke", css("--bg")).attr("stroke-width", 1.5).style("cursor", "pointer")
+    .on("click", (_, d) => { $("paper").value = d.id; if (d.in_corpus) load();
+                              else window.open(`https://arxiv.org/abs/${d.id}`, "_blank"); })
+    .call(d3.drag()
+      .on("start", (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on("end", (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+  node.append("title").text((d) => `${d.title || d.id}\n${d.id}${d.published ? " · " + d.published : ""}`);
+  const label = g.append("g").selectAll("text").data(nodes.filter((n) => n.in_corpus)).join("text")
+    .text((d) => (d.title || d.id).slice(0, 32)).attr("dx", 9).attr("dy", 3);
+
+  sim.on("tick", () => {
+    link.attr("x1", (d) => d.source.x).attr("y1", (d) => d.source.y)
+        .attr("x2", (d) => d.target.x).attr("y2", (d) => d.target.y);
+    node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
+    label.attr("x", (d) => d.x).attr("y", (d) => d.y);
+  });
+}
+
+$("go").onclick = load;
+$("paper").addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });
+const start = new URLSearchParams(location.search).get("paper");
+if (start) { $("paper").value = start; load(); }
+</script>
+</body>
+</html>

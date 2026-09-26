@@ -188,3 +188,29 @@ CREATE TABLE IF NOT EXISTS profile_audit(
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_audit_user ON profile_audit(user_id, created_at DESC);
+
+-- ---------------------------------------------------------------- Phase 4: graph (ADR 0009)
+
+-- The sentence in paper A that cites arXiv paper B, and what it does with B (critical,
+-- comparative, builds_on, neutral). HTML-parsed papers only. Enables "who criticises B".
+CREATE TABLE IF NOT EXISTS citation_contexts(
+    id             BIGSERIAL PRIMARY KEY,
+    citing_id      VARCHAR(30) NOT NULL REFERENCES papers(arxiv_id) ON DELETE CASCADE,
+    cited_base_id  VARCHAR(30) NOT NULL,
+    ref_ordinal    INT,
+    sentence       TEXT NOT NULL,
+    anchor         VARCHAR(100),
+    function       VARCHAR(16) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_contexts_cited  ON citation_contexts(cited_base_id, function);
+CREATE INDEX IF NOT EXISTS idx_contexts_citing ON citation_contexts(citing_id);
+
+-- Influence over the in-corpus citation graph, recomputed after ingestion (not per request).
+CREATE TABLE IF NOT EXISTS paper_influence(
+    arxiv_id     VARCHAR(30) PRIMARY KEY REFERENCES papers(arxiv_id) ON DELETE CASCADE,
+    in_degree    INT NOT NULL,
+    pagerank     REAL NOT NULL,
+    computed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_influence_rank ON paper_influence(pagerank DESC);
+CREATE INDEX IF NOT EXISTS idx_citations_citing ON paper_citations(citing_id);

@@ -37,6 +37,7 @@ class SearchHit:
     content: str
     score: float
     metadata: dict
+    published: str | None = None  # ISO date, from the payload
 
 
 class VectorStore:
@@ -189,6 +190,7 @@ class VectorStore:
                     content=p.get("content", ""),
                     score=point.score,
                     metadata=p.get("metadata") or {},
+                    published=p.get("published"),
                 )
             )
         return hits

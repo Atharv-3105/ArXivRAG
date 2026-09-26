@@ -5,9 +5,10 @@ from sqlalchemy import delete, select, text, update
 from sqlalchemy.dialects.postgresql import insert  # the generic insert has no ON CONFLICT
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.pipeline.citations import citation_edges
+from src.pipeline.citations import citation_edges, context_rows
 from src.pipeline.models import Chunk, PaperMetadata, ProcessedPaper
 from src.storage.database import (
+    CitationContextRow,
     FailedPaper,
     IngestionRun,
     Paper,
@@ -93,6 +94,12 @@ class PgRepo:
         edges = citation_edges(paper_meta.arxiv_id, paper_data.references)
         if edges:
             await session.execute(insert(PaperCitation).values(edges).on_conflict_do_nothing())
+
+        contexts = context_rows(
+            paper_meta.arxiv_id, paper_data.references, paper_data.citation_contexts
+        )
+        if contexts:
+            await session.execute(insert(CitationContextRow).values(contexts))
 
         # Nothing is visible until this commit; any exception above leaves no half-written paper.
         await session.commit()

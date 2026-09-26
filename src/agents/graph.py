@@ -14,6 +14,7 @@ Failure policy (never block, never invent):
   every LLM unavailable  -> LLMUnavailableError propagates; the API maps it to 503 + Retry-After
 """
 
+import asyncio
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -24,11 +25,13 @@ from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
 from src.agents import intent as intent_mod
+from src.agents.graph_retrieval import expand, mastery_level, rerank
 from src.agents.grounding import resolve_citations
 from src.agents.prompts import PROMPT_VERSION, build_messages
 from src.agents.state import AgentState, Source
 from src.core.config import settings
 from src.core.exceptions import RetrievalError
+from src.graph.store import GraphStore
 from src.llm.base import LLMRequest
 from src.llm.router import LLMRouter
 from src.storage.vector_db import SearchHit
@@ -55,6 +58,7 @@ class Retriever(Protocol):
 class ChatDeps:
     llm: LLMRouter
     retriever: Retriever
+    graph: GraphStore | None = None  # None: vector-only retrieval
 
 
 def _traceable(fn):
@@ -119,9 +123,26 @@ def select_sources(hits: list[SearchHit]) -> list[Source]:
                 score=round(hit.score, 4),
                 url=_url(hit),
                 math_fidelity=hit.metadata.get("math_fidelity", "degraded"),
+                role="retrieved",
             )
         )
     return sources
+
+
+async def _graph_sources(
+    deps: "ChatDeps", state: AgentState, query: str, hits: list[SearchHit]
+) -> list[Source]:
+    """Re-rank + expand with the citation graph. Raises on any failure; the caller falls back."""
+    assert deps.graph is not None
+    level = mastery_level(state.get("profile"), state.get("mastery"))
+    influence = await deps.graph.influence(list(dict.fromkeys(h.paper_id for h in hits)))
+    sources = select_sources(rerank(hits, level, influence))[: settings.RETRIEVAL_TOP_K]
+    extra = await expand(
+        state.get("intent", "chat"), query, sources, level, deps.graph, deps.retriever, _url
+    )
+    if extra:
+        logger.info("Graph expansion", added=len(extra), roles=sorted({s["role"] for s in extra}))
+    return sources + extra
 
 
 def build_graph(deps: ChatDeps):
@@ -145,10 +166,24 @@ def build_graph(deps: ChatDeps):
         except RetrievalError as e:
             logger.error("Retrieval unavailable, answering without the LLM", error=e.message)
             return {"retrieval_query": query, "sources": [], "degraded": "retrieval_unavailable"}
-        sources = select_sources(hits)[: settings.RETRIEVAL_TOP_K]
+        sources = select_sources(hits)[: settings.RETRIEVAL_TOP_K]  # the vector-only baseline
+        graph_status = "off"
+        if deps.graph is not None and settings.GRAPH_ENABLED and hits:
+            try:
+                async with asyncio.timeout(settings.GRAPH_TIMEOUT_SECONDS):
+                    sources = await _graph_sources(deps, state, query, hits)
+                graph_status = "ok"
+            except Exception as e:  # plan §4: fall back to vector-only on graph failure
+                graph_status = "failed"
+                logger.warning("Graph retrieval failed; vector-only", error=repr(e))
         writer({"type": "sources", "sources": sources})
         degraded = "no_sources" if not sources and state.get("intent") != "chat" else None
-        return {"retrieval_query": query, "sources": sources, "degraded": degraded}
+        return {
+            "retrieval_query": query,
+            "sources": sources,
+            "degraded": degraded,
+            "graph_status": graph_status,
+        }
 
     @_traceable
     async def generate(state: AgentState) -> dict:

@@ -134,6 +134,33 @@ class PaperCitation(Base):
     ref_ordinal: Mapped[int | None] = mapped_column(Integer)
 
 
+class CitationContextRow(Base):
+    __tablename__ = "citation_contexts"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    citing_id: Mapped[str] = mapped_column(
+        String(30), ForeignKey("papers.arxiv_id", ondelete="CASCADE"), nullable=False
+    )
+    cited_base_id: Mapped[str] = mapped_column(String(30), nullable=False)
+    ref_ordinal: Mapped[int | None] = mapped_column(Integer)
+    sentence: Mapped[str] = mapped_column(Text, nullable=False)
+    anchor: Mapped[str | None] = mapped_column(String(100))
+    function: Mapped[str] = mapped_column(String(16), nullable=False)
+
+
+class PaperInfluence(Base):
+    __tablename__ = "paper_influence"
+
+    arxiv_id: Mapped[str] = mapped_column(
+        String(30), ForeignKey("papers.arxiv_id", ondelete="CASCADE"), primary_key=True
+    )
+    in_degree: Mapped[int] = mapped_column(Integer, nullable=False)
+    pagerank: Mapped[float] = mapped_column(REAL, nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("NOW()")
+    )
+
+
 class IngestionRun(Base):
     __tablename__ = "ingestion_runs"
 

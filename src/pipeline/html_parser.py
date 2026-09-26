@@ -14,7 +14,13 @@ from lxml import etree, html
 
 from src.core.config import settings
 from src.core.exceptions import ParseError
-from src.pipeline.models import Equation, ParsedDocument, Reference, SectionContent
+from src.pipeline.models import (
+    CitationContext,
+    Equation,
+    ParsedDocument,
+    Reference,
+    SectionContent,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -30,6 +36,9 @@ SKIP_TAGS = {"script", "style", "svg", "img", "noscript", "button", "nav", "head
 BLOCK_TAGS = {"p", "div", "table", "figure", "ul", "ol", "section", "pre", "blockquote"}
 MAX_TABLE_ROWS = 60
 MAIN_TEXT = "Main Text"
+MAX_CONTEXT_CHARS = 600
+# Sentence boundary: end punctuation, space, then something that can start a sentence.
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9(\[$])")
 
 
 def _classes(el: etree._Element) -> set[str]:
@@ -102,7 +111,9 @@ class HtmlParser:
         self._flush_main(sections, pending)
 
         references = self._references(doc)
+        contexts = self._citation_contexts(doc)
         stats = self._stats(sections, references)
+        stats["citation_contexts"] = len(contexts)
 
         if stats["words"] < self.min_words:
             raise ParseError(f"Paper too short: {stats['words']} words", code="PARSE_LENGTH_ERROR")
@@ -117,6 +128,7 @@ class HtmlParser:
             sections=sections,
             equations=self._equations,
             references=references,
+            citation_contexts=contexts,
             stats=stats,
         )
 
@@ -383,6 +395,44 @@ class HtmlParser:
             ]
             refs.append(Reference(ordinal=i, key=li.get("id"), text=text, urls=urls))
         return refs
+
+    # ------------------------------------------------------------ citation contexts
+
+    def _citation_contexts(self, doc: etree._Element) -> list[CitationContext]:
+        """The sentence around every in-text citation, with the bibliography keys it cites.
+
+        LaTeXML renders a LaTeX cite as <cite class="ltx_cite"> containing links to "#bib.bibN",
+        the id of the bibliography <li>. That link is what lets us say *which sentence of paper B
+        talks about paper A* - the raw material for critique detection (ADR 0009).
+        """
+        contexts: list[CitationContext] = []
+        seen: set[tuple[str, tuple[str, ...]]] = set()
+        for para in doc.xpath(
+            './/p[contains(concat(" ", normalize-space(@class), " "), " ltx_p ")]'
+        ):
+            if para.xpath('ancestor::*[contains(@class,"ltx_bibliography")]'):
+                continue
+            cites = para.xpath('.//cite[contains(@class,"ltx_cite")]')
+            if not cites:
+                continue
+            sentences = _SENTENCE_SPLIT.split(self._inline(para))
+            anchor = next(iter(para.xpath("ancestor::section[@id][1]/@id")), None)
+            for cite in cites:
+                keys = tuple(
+                    href.split("#", 1)[1] for href in cite.xpath(".//a/@href") if "#bib" in href
+                )
+                if not keys:
+                    continue
+                marker = self._inline(cite)
+                sentence = next((s for s in sentences if marker and marker in s), None)
+                if sentence is None:
+                    continue
+                sentence = sentence.strip()[:MAX_CONTEXT_CHARS]
+                if (sentence, keys) in seen:
+                    continue
+                seen.add((sentence, keys))
+                contexts.append(CitationContext(keys=list(keys), sentence=sentence, anchor=anchor))
+        return contexts
 
     # ------------------------------------------------------------------- stats
 

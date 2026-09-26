@@ -7,6 +7,7 @@ Each phase document ends with the questions it prepares you for, each with the a
 | Ingestion, idempotency, dual-store consistency, chunking, embeddings, citation extraction | [Phase 1](phases/phase-1-ingestion.md#5-interview-questions-with-the-answer-you-should-be-able-to-give) |
 | Hybrid retrieval, RRF, LangGraph, SSE streaming, grounding, conversation state | [Phase 2](phases/phase-2-agentic-loop.md#4-interview-questions-with-the-answer-you-should-be-able-to-give) |
 | Async memory, learner model (EMA/decay/SM-2), idempotency, optimistic concurrency, JWT, GDPR | [Phase 3](phases/phase-3-personalization-memory.md#6-interview-questions-with-the-answer-you-should-be-able-to-give) |
+| Graph + vector fusion, PageRank, recursive CTEs, citation function, re-ranking | [Phase 4](phases/phase-4-graph-retrieval.md#6-interview-questions-with-the-answer-you-should-be-able-to-give) |
 | LLM routing, failover, rate limiting, circuit breakers | [ADR 0004](adr/0004-llm-router.md) (Decision and Alternatives sections) |
 
 ## Cross-cutting

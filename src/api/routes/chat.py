@@ -60,6 +60,7 @@ class ChatResponse(BaseModel):
     sources: list[Source]
     ungrounded: list[int]
     degraded: str | None
+    graph_status: str
     provider: str
     model: str
     trace_id: str | None
@@ -184,6 +185,7 @@ async def chat(
         sources=state.get("sources", []),
         ungrounded=state.get("ungrounded", []),
         degraded=state.get("degraded"),
+        graph_status=state.get("graph_status", "off"),
         provider=state.get("provider", ""),
         model=state.get("model", ""),
         trace_id=current_trace_id(),
@@ -252,6 +254,7 @@ async def chat_stream(
                 "citations": final.get("citations", []),
                 "ungrounded": final.get("ungrounded", []),
                 "degraded": final.get("degraded"),
+                "graph_status": final.get("graph_status", "off"),
                 "provider": final.get("provider", ""),
                 "model": final.get("model", ""),
                 "timings": final.get("timings", {}),

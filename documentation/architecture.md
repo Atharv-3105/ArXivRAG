@@ -10,13 +10,14 @@ Clients          Web UI · CLI                                          (Phase 2
 API              FastAPI · JWT auth · per-user limits · /chat, /chat/stream (SSE), /me, /feedback
                  trace-id middleware · typed errors → HTTP                   [ADR 0006]
                      │
-Agentic core     LangGraph: classify → retrieve (hybrid, RRF) → generate   [ADR 0005]
+Agentic core     LangGraph: classify → retrieve (hybrid, RRF, + graph) → generate [ADR 0005, 0009]
                  (specialists: Phase 5, guardrail: Phase 6)
                  LLM router: N free providers, failover, budgets, breakers   [ADR 0004]
                  MemoryManager: async queue → learner model → profile/mastery [ADR 0008]
                      │
 Data             Postgres 16 ── source of truth: papers, chunks, equations,
-                                references, citation graph, runs, DLQ      [ADR 0002, 0003]
+                                references, citation graph + contexts,      [ADR 0002, 0003]
+                                influence, runs, DLQ                         [ADR 0009]
                  Qdrant ─────── derived vector index, rebuildable from Postgres
 Background       python -m src.pipeline.runner (cron) · reindex (reconciler)  [ADR 0001]
 ```
@@ -29,6 +30,8 @@ Background       python -m src.pipeline.runner (cron) · reindex (reconciler)  [
 | Chunk text + section path | Postgres `paper_chunks` | pipeline | no |
 | Equations (LaTeX), references | Postgres | pipeline | no |
 | Citation edges | Postgres `paper_citations` | pipeline, in the paper's own transaction | yes, from references |
+| Citation contexts (sentence + function) | Postgres `citation_contexts` | pipeline, same transaction | yes, by re-parsing cached HTML |
+| Influence (PageRank) | Postgres `paper_influence` | after each run / reindex | yes, recomputed |
 | Dense + BM25 vectors + payload | Qdrant | pipeline / `reindex` | **yes, from Postgres** |
 | Conversations, messages (per user) | Postgres | chat API, best effort | no |
 | Users, profiles, concept mastery | Postgres | auth, `/me`, MemoryManager | no |
@@ -58,6 +61,6 @@ Background       python -m src.pipeline.runner (cron) · reindex (reconciler)  [
 
 ## Documents
 
-- Phases: [phase 1 — ingestion](phases/phase-1-ingestion.md) · [phase 2 — agentic loop](phases/phase-2-agentic-loop.md) · [phase 3 — personalization](phases/phase-3-personalization-memory.md)
-- ADRs: [0001](adr/0001-html-first-ingestion.md) · [0002](adr/0002-postgres-source-of-truth.md) · [0003](adr/0003-citation-graph-in-postgres.md) · [0004](adr/0004-llm-router.md) · [0005](adr/0005-hybrid-retrieval-rrf.md) · [0006](adr/0006-single-instance-in-process-state.md) · [0007](adr/0007-conversation-state-in-postgres.md) · [0008](adr/0008-learner-model-and-memory-pipeline.md)
+- Phases: [phase 1 — ingestion](phases/phase-1-ingestion.md) · [phase 2 — agentic loop](phases/phase-2-agentic-loop.md) · [phase 3 — personalization](phases/phase-3-personalization-memory.md) · [phase 4 — graph retrieval](phases/phase-4-graph-retrieval.md)
+- ADRs: [0001](adr/0001-html-first-ingestion.md) · [0002](adr/0002-postgres-source-of-truth.md) · [0003](adr/0003-citation-graph-in-postgres.md) · [0004](adr/0004-llm-router.md) · [0005](adr/0005-hybrid-retrieval-rrf.md) · [0006](adr/0006-single-instance-in-process-state.md) · [0007](adr/0007-conversation-state-in-postgres.md) · [0008](adr/0008-learner-model-and-memory-pipeline.md) · [0009](adr/0009-graph-enhanced-retrieval.md)
 - [Interview questions](interview_questions.md)

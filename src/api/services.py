@@ -14,6 +14,7 @@ from src.api.limits import SlidingWindowLimiter
 from src.auth.users import PgUserStore, UserStore
 from src.core.config import settings
 from src.core.exceptions import IndexError
+from src.graph.store import GraphStore, PgGraphStore
 from src.llm.registry import build_router
 from src.llm.router import LLMRouter
 from src.memory.manager import MemoryManager
@@ -31,15 +32,21 @@ class Services:
     conversations: ConversationStore
     users: UserStore
     profiles: ProfileStore
+    graph_store: GraphStore | None = None
     memory: MemoryManager | None = None
     limiter: SlidingWindowLimiter = field(
         default_factory=lambda: SlidingWindowLimiter(settings.RATE_LIMIT_PER_MINUTE)
+    )
+    public_limiter: SlidingWindowLimiter = field(
+        default_factory=lambda: SlidingWindowLimiter(settings.RATE_LIMIT_PUBLIC_PER_MINUTE)
     )
     graph: Any = None  # compiled LangGraph
 
     def __post_init__(self) -> None:
         if self.graph is None:
-            self.graph = build_graph(ChatDeps(llm=self.llm, retriever=self.retriever))
+            self.graph = build_graph(
+                ChatDeps(llm=self.llm, retriever=self.retriever, graph=self.graph_store)
+            )
         if self.memory is None:
             self.memory = MemoryManager(self.profiles)
 
@@ -81,4 +88,5 @@ async def create_services() -> Services:
         conversations=PgConversationStore(),
         users=PgUserStore(),
         profiles=PgProfileStore(),
+        graph_store=PgGraphStore(),
     )

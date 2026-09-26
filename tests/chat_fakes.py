@@ -24,16 +24,26 @@ def hit(paper_id: str, n: int, content: str | None = None, **meta) -> SearchHit:
 
 
 class FakeRetriever:
-    def __init__(self, hits: list[SearchHit] | None = None, error: Exception | None = None):
+    def __init__(
+        self,
+        hits: list[SearchHit] | None = None,
+        error: Exception | None = None,
+        filtered_only: list[SearchHit] | None = None,
+    ):
         self.hits = hits or []
         self.error = error
+        # Chunks that only a paper-filtered search finds (like real Qdrant: papers reached through
+        # the citation graph are rarely in the unfiltered top-k).
+        self.filtered_only = filtered_only or []
         self.queries: list[str] = []
 
     async def search(self, query, top_k=None, paper_ids=None):
         self.queries.append(query)
         if self.error:
             raise self.error
-        return self.hits[: top_k or len(self.hits)]
+        pool = self.hits if paper_ids is None else self.hits + self.filtered_only
+        hits = [h for h in pool if paper_ids is None or h.paper_id in paper_ids]
+        return hits[: top_k or len(hits)]
 
 
 class RecordingAdapter(MockAdapter):
@@ -70,13 +80,14 @@ def router(adapter=None) -> LLMRouter:
     return LLMRouter([(adapter or RecordingAdapter(), ProviderLimits())])
 
 
-def make_services(hits=None, retrieval_error=None, adapter=None) -> Services:
+def make_services(hits=None, retrieval_error=None, adapter=None, graph_store=None) -> Services:
     return Services(
         llm=router(adapter),
         retriever=FakeRetriever(hits, retrieval_error),
         conversations=InMemoryConversationStore(),
         users=InMemoryUserStore(),
         profiles=InMemoryProfileStore(),
+        graph_store=graph_store,
     )
 
 

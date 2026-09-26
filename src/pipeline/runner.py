@@ -47,6 +47,17 @@ async def _record_failure(repo: PgRepo, arxiv_id: str, reason: str) -> None:
         logger.error("Could not write to DLQ", arxiv_id=arxiv_id, error=str(e))
 
 
+async def _refresh_influence() -> None:
+    """New papers change the citation graph: recompute PageRank. Best effort."""
+    from src.graph.influence import refresh_influence
+    from src.graph.store import PgGraphStore
+
+    try:
+        await refresh_influence(PgGraphStore())
+    except Exception as e:
+        logger.error("Influence refresh failed", error=str(e))
+
+
 async def index_from_store(repo: PgRepo, vector_store: VectorStore, arxiv_id: str) -> int:
     """Re-embed a paper from Postgres (the source of truth) and mark it indexed. Returns chunks."""
     async with get_async_session() as session:
@@ -95,6 +106,8 @@ async def run_pipeline(
                 paper, extractor, chunker, db_repo, vector_store, metrics, reingest
             )
         status = "succeeded" if metrics.failed == 0 else "partial"
+        if metrics.indexed:
+            await _refresh_influence()
     finally:
         report = {**asdict(metrics), "parse_success_rate": metrics.parse_success_rate}
         logger.info("Pipeline finished", run_id=run_id, status=status, metrics=report)
@@ -161,6 +174,7 @@ async def _process_paper(
             chunks=chunks,
             equations=doc.equations,
             references=doc.references,
+            citation_contexts=doc.citation_contexts,
             parse_method=doc.method,
             math_fidelity=doc.math_fidelity,
             parse_stats=doc.stats,

@@ -17,6 +17,7 @@ class Source(TypedDict):
     score: float
     url: str  # deep link: arxiv.org/html/<id>#<anchor> when the section anchor is known
     math_fidelity: str
+    role: str  # retrieved | prerequisite | related | citation_context (graph expansion, Phase 4)
 
 
 class Citation(TypedDict):
@@ -41,6 +42,7 @@ class AgentState(TypedDict, total=False):
     retrieval_query: str
     sources: list[Source]
     degraded: str | None  # "retrieval_unavailable" | "no_sources": answered without the LLM
+    graph_status: str  # "ok" | "failed" (fell back to vector-only) | "off"
     # generate
     response: str
     citations: list[Citation]

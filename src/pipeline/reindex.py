@@ -42,6 +42,10 @@ async def reindex(all_papers: bool = False) -> dict:
             except Exception as e:
                 report["failed"] += 1
                 logger.error("Reindex failed", arxiv_id=arxiv_id, error=str(e))
+        if report["papers"]:
+            from src.pipeline.runner import _refresh_influence
+
+            await _refresh_influence()
     finally:
         await store.close()
         await dispose_engine()

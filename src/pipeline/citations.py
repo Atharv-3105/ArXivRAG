@@ -65,3 +65,78 @@ def citation_edges(citing_id: str, references: list[Reference]) -> list[dict]:
                 "ref_ordinal": ref.ordinal,
             }
     return list(edges.values())
+
+
+# ---------------------------------------------------------------- citation function (ADR 0009)
+#
+# What a citing sentence *does* with the cited work, after Teufel et al.'s citation-function
+# scheme, collapsed to four classes the product needs:
+#   critical     points out a weakness / failure / disagreement      -> "who criticises X"
+#   comparative  positions results against it ("outperforms [12]")   -> "how X compares"
+#   builds_on    uses or extends it ("following [12]", "we adopt")   -> prerequisite chains
+#   neutral      everything else (background mentions)
+# Rules, not a model: free, deterministic, explainable. Precision over recall: "however" alone
+# is too common, so contrast words only count next to a weakness word. Measured in Phase 6.
+
+CITATION_FUNCTIONS = ("critical", "comparative", "builds_on", "neutral")
+
+_CRITICAL = re.compile(
+    r"\b(fail(s|ed|ure)?( to)?|suffer(s|ed)? from|limitation|drawback|shortcoming|flaw(ed)?|"
+    r"problematic|incorrect|erroneous|unrealistic|does not (hold|scale|generali[sz]e)|"
+    r"cannot|can ?not|unable to|not robust|brittle|overestimate|underestimate|"
+    r"contrary to|contradict|questionable|we (show|find|argue) that .{0,60}\b(not|no)\b|"
+    r"is (limited|restricted) to|overlook(s|ed)?)\b",
+    re.IGNORECASE,
+)
+_COMPARATIVE = re.compile(
+    r"\b(outperform(s|ed|ing)?|surpass(es|ed)?|improv(e|es|ed|ing) (up)?on|better than|"
+    r"worse than|compared (to|with)|in contrast to|unlike|than (the )?(prior|previous|baseline)|"
+    r"state[- ]of[- ]the[- ]art|beats?|competitive with|on par with)\b",
+    re.IGNORECASE,
+)
+_BUILDS_ON = re.compile(
+    r"\b(follow(ing|s)?|build(s|ing)? (up)?on|built on|based on|extend(s|ed|ing)?|inspired by|"
+    r"we (use|adopt|employ|leverage|apply|borrow|reuse)|adopt(ed|ing)? from|as (in|proposed in)|"
+    r"introduced (in|by)|proposed (in|by)|originally (proposed|introduced))\b",
+    re.IGNORECASE,
+)
+
+
+def citation_function(sentence: str) -> str:
+    if _CRITICAL.search(sentence):
+        return "critical"
+    if _COMPARATIVE.search(sentence):
+        return "comparative"
+    if _BUILDS_ON.search(sentence):
+        return "builds_on"
+    return "neutral"
+
+
+def context_rows(citing_id: str, references: list[Reference], contexts: list) -> list[dict]:
+    """Rows for citation_contexts: one per (sentence, cited arXiv paper). Contexts whose keys
+    resolve to no arXiv id are dropped: they cannot join the graph."""
+    own = base_id(citing_id)
+    by_key = {r.key: r for r in references if r.key}
+    rows: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for ctx in contexts:
+        function = citation_function(ctx.sentence)
+        for key in ctx.keys:
+            ref = by_key.get(key)
+            if ref is None:
+                continue
+            for cited in extract_arxiv_ids(ref.text, ref.urls):
+                if cited == own or (ctx.sentence, cited) in seen:
+                    continue
+                seen.add((ctx.sentence, cited))
+                rows.append(
+                    {
+                        "citing_id": citing_id,
+                        "cited_base_id": cited,
+                        "ref_ordinal": ref.ordinal,
+                        "sentence": ctx.sentence,
+                        "anchor": ctx.anchor,
+                        "function": function,
+                    }
+                )
+    return rows

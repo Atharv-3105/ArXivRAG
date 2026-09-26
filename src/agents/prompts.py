@@ -6,9 +6,10 @@ quality can be compared across versions from day one.
 """
 
 from src.agents.state import Intent, Source
+from src.core.config import settings
 from src.llm.base import ChatMessage
 
-PROMPT_VERSION = "chat-v2"  # v2: reader profile block (Phase 3)
+PROMPT_VERSION = "chat-v3"  # v2: reader profile block (Phase 3); v3: graph source roles (Phase 4)
 
 _BASE = """You are ArXivMind, a research assistant for AI/ML papers.
 
@@ -18,6 +19,9 @@ Rules:
 - Keep LaTeX as LaTeX ($...$ inline, $$...$$ display).
 - Sources marked (math: degraded) were extracted from a PDF: their formulas may be garbled, so do
   not quote those formulas as exact.
+- A source marked (prerequisite) is a paper the main results build on: use it to explain
+  foundations. A source marked (what another paper says) is one paper's statement about another:
+  attribute it ("X argues that ..."), do not present it as established fact.
 - Be concise. Use short paragraphs or bullet points."""
 
 _INTENT: dict[Intent, str] = {
@@ -43,6 +47,13 @@ _INTENT: dict[Intent, str] = {
 }
 
 
+_ROLE_LABEL = {
+    "prerequisite": " (prerequisite)",
+    "related": " (related via citations)",
+    "citation_context": " (what another paper says)",
+}
+
+
 def format_sources(sources: list[Source]) -> str:
     """One block per source. The mock LLM parses lines that start with "[n]"."""
     if not sources:
@@ -50,6 +61,7 @@ def format_sources(sources: list[Source]) -> str:
     blocks = []
     for s in sources:
         fidelity = " (math: degraded)" if s["math_fidelity"] == "degraded" else ""
+        fidelity += _ROLE_LABEL.get(s.get("role", "retrieved"), "")
         body = " ".join(s["content"].split())
         blocks.append(
             f"[{s['n']}] {body}\n    — {s['title']} ({s['paper_id']}), {s['section']}{fidelity}"
@@ -77,8 +89,8 @@ def reader_block(profile: dict, mastery: dict[str, float]) -> str:
     lines = [f"The reader is {level}.", _MATH.get(profile.get("math_depth", ""), _MATH["standard"])]
     if profile.get("goals"):
         lines.append("Their goals: " + "; ".join(profile["goals"][:3]) + ".")
-    strong = [c.replace("_", " ") for c, m in mastery.items() if m >= 0.7]
-    weak = [c.replace("_", " ") for c, m in mastery.items() if m < 0.35]
+    strong = [c.replace("_", " ") for c, m in mastery.items() if m >= settings.MASTERY_STRONG_ABOVE]
+    weak = [c.replace("_", " ") for c, m in mastery.items() if m < settings.MASTERY_WEAK_BELOW]
     if strong:
         lines.append("They already know: " + ", ".join(strong) + " (do not re-explain).")
     if weak:

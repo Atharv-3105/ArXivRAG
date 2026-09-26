@@ -39,6 +39,10 @@ These are shallow, bounded traversals over a graph of thousands to tens of thous
 
 The migration path is cheap: `paper_citations` is already an edge list and can be bulk-loaded with `LOAD CSV`.
 
+## Follow-up
+
+ADR 0009 adds citation *contexts* (the citing sentence and its function) and precomputed PageRank on top of this edge table.
+
 ## Consequences
 
 - Good: one database, one backup, one transaction. Graph writes and paper writes are atomic.

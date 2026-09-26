@@ -79,6 +79,16 @@ class Settings(BaseSettings):
     )
     GRAPH_CONTEXT_PAPERS: int = Field(default=3, description="Cited papers added as context")
     GRAPH_MAX_DEPTH: int = Field(default=2, ge=1, le=4)
+    GRAPH_ENABLED: bool = Field(default=True, description="Graph expansion + influence re-rank")
+    GRAPH_TIMEOUT_SECONDS: float = Field(
+        default=1.5, description="Budget for all graph work in one turn; then vector-only"
+    )
+    GRAPH_MAX_NODES: int = Field(default=150, le=500, description="Cap for /papers/{id}/graph")
+    MASTERY_WEAK_BELOW: float = Field(default=0.35, ge=0, le=1)
+    MASTERY_STRONG_ABOVE: float = Field(default=0.7, ge=0, le=1)
+    RERANK_SECTION_BOOST: float = Field(default=1.25, ge=1, description="Level-matched sections")
+    RERANK_INFLUENCE_WEIGHT: float = Field(default=0.1, ge=0, description="Per unit of PageRank")
+    RATE_LIMIT_PUBLIC_PER_MINUTE: int = Field(default=60, description="Per IP, public endpoints")
 
     # LLM router: several free-tier providers with per-task priority, failover, rate-limit budgets
     # and circuit breakers (src/llm/router.py). A provider is enabled by setting its key.
