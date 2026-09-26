@@ -9,6 +9,7 @@ dependencies = [
     "pydantic-settings",
     "structlog",
     "httpx",
+    "anthropic",
     "tenacity",
     "pymupdf",
     "lxml",

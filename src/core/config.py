@@ -1,10 +1,12 @@
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """Every tunable lives here (plan §8: config-driven behaviour, no hardcoded values)."""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -13,25 +15,31 @@ class Settings(BaseSettings):
     )
 
     APP_NAME: str = Field(default="ArXivMind", description="Service name")
+    APP_VERSION: str = Field(default="0.2.0")
+    ENVIRONMENT: Literal["dev", "test", "prod"] = "dev"
     DEBUG: bool = Field(default=False, description="Enable debug mode")
     LOG_LEVEL: str = Field(default="INFO", description="Logging Level")
-    SECRET_KEY: str = Field(..., description="Required for sessions/auth")
+    SECRET_KEY: str = Field(..., description="Signs JWTs. Required; use >=32 random chars")
 
     # API
     HOST: str = Field(default="0.0.0.0")
     PORT: int = Field(default=8000)
     CORS_ORIGINS: list[str] = Field(default=["http://localhost:3000", "http://localhost:8080"])
+    PUBLIC_BASE_URL: str = Field(default="http://localhost:8000")
 
     # Storage
     DATABASE_URL: str | None = Field(default=None, description="PostgreSQL connection string")
     QDRANT_URL: str = Field(default="http://localhost:6333", description="Qdrant API endpoint")
     QDRANT_API_KEY: str | None = Field(default=None, description="Only for secured/cloud Qdrant")
-    QDRANT_COLLECTION: str = Field(default="arxiv_papers_v1")
+    QDRANT_COLLECTION: str = Field(default="arxiv_papers_v2")
+    DEPENDENCY_TIMEOUT_SECONDS: float = Field(default=3.0, description="Readiness probe timeout")
 
-    # Embeddings
+    # Embeddings (fastembed / ONNX: no PyTorch, fits free-tier memory)
     EMBEDDING_MODEL: str = Field(default="BAAI/bge-small-en-v1.5")
     EMBEDDING_DIM: int = Field(default=384, description="Must match EMBEDDING_MODEL's output size")
     EMBEDDING_BATCH_SIZE: int = Field(default=32)
+    SPARSE_MODEL: str = Field(default="Qdrant/bm25", description="Sparse model for hybrid search")
+    MODEL_CACHE_DIR: str | None = Field(default=None, description="Where ONNX models are cached")
 
     # ArXiv ingestion
     ARXIV_QUERY: str = Field(
@@ -43,15 +51,94 @@ class Settings(BaseSettings):
     ARXIV_REQUEST_DELAY_SECONDS: float = Field(
         default=3.0, description="Pause between arXiv requests (arXiv asks for ~1 per 3s)"
     )
-    CACHE_DIR: str = Field(
-        default="data", description="Downloaded HTML/PDF live in <dir>/html, pdf"
-    )
+    CACHE_DIR: str = Field(default="data", description="Downloaded HTML/PDF live in <dir>/html, pdf")
 
     # Parsing / chunking
     PARSE_MIN_WORDS: int = Field(default=800)
     PARSE_MIN_SECTIONS: int = Field(default=2)
     CHUNK_SIZE: int = Field(default=1000, description="Characters per chunk")
     CHUNK_OVERLAP: int = Field(default=200, description="Characters shared between chunks")
+
+    # Retrieval
+    RETRIEVAL_TOP_K: int = Field(default=6, ge=1, le=30)
+    RETRIEVAL_PREFETCH: int = Field(default=30, description="Candidates per branch before RRF")
+    GRAPH_CONTEXT_PAPERS: int = Field(default=3, description="Cited papers added as context")
+    GRAPH_MAX_DEPTH: int = Field(default=2, ge=1, le=4)
+
+    # LLM router: several free-tier providers with per-task priority, failover, rate-limit budgets
+    # and circuit breakers (src/llm/router.py). A provider is enabled by setting its key.
+    GROQ_API_KEY: SecretStr | None = None
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
+    GEMINI_API_KEY: SecretStr | None = None
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    CEREBRAS_API_KEY: SecretStr | None = None
+    CEREBRAS_MODEL: str = "llama3.3-70b"
+    OPENROUTER_API_KEY: SecretStr | None = None
+    OPENROUTER_MODELS: list[str] = Field(
+        default=["z-ai/glm-5.2:free", "minimax/minimax-m3:free"],
+        description="Free models tried in order; they share ONE account-wide rate limit",
+    )
+    OLLAMA_BASE_URL: str | None = Field(default=None, description="e.g. http://localhost:11434/v1")
+    OLLAMA_MODEL: str = "llama3.1:8b"
+    ANTHROPIC_API_KEY: SecretStr | None = Field(default=None, description="Paid; off unless set")
+    ANTHROPIC_MODEL: str = "claude-opus-5"
+    ANTHROPIC_SERVER_FALLBACKS: bool = Field(
+        default=True, description="Retry safety declines on a fallback model (server-side)"
+    )
+    LLM_PROVIDERS_JSON: str | None = Field(
+        default=None,
+        description="Full override: JSON list of provider configs (see src/llm/registry.py)",
+    )
+    LLM_ENABLE_MOCK: bool | None = Field(
+        default=None, description="Offline mock provider. Default: on only if no real provider"
+    )
+    LLM_TASK_ORDERS: dict[str, list[str]] = Field(
+        default={
+            # classification: fastest first
+            "router": ["groq", "cerebras", "gemini", "openrouter", "ollama", "anthropic"],
+            # teaching: strongest free reasoning first
+            "tutor": ["gemini", "openrouter", "groq", "cerebras", "ollama", "anthropic"],
+            "default": ["gemini", "groq", "openrouter", "cerebras", "ollama", "anthropic"],
+        },
+        description="Provider preference per task; names may be prefixes ('openrouter')",
+    )
+    LLM_MAX_TOKENS: int = Field(default=1500)
+    LLM_TEMPERATURE: float = Field(default=0.2, description="Ignored by providers that reject it")
+    LLM_TIMEOUT_SECONDS: float = Field(default=60.0, description="Whole non-streaming call")
+    LLM_FIRST_TOKEN_TIMEOUT_SECONDS: float = Field(default=20.0)
+    LLM_STREAM_IDLE_TIMEOUT_SECONDS: float = Field(default=30.0)
+    LLM_BREAKER_FAILURE_THRESHOLD: int = Field(default=3, ge=1)
+    LLM_BREAKER_RECOVERY_SECONDS: float = Field(default=120.0)
+    LLM_BREAKER_MAX_RECOVERY_SECONDS: float = Field(default=1800.0)
+    LLM_DEFAULT_RETRY_AFTER_SECONDS: float = Field(default=60.0)
+    ROUTER_USE_LLM: bool = Field(
+        default=False, description="Rule-based intent router is free; LLM router costs one call"
+    )
+
+    # Auth / SaaS
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_TTL_MINUTES: int = Field(default=60 * 24)
+    ALLOW_REGISTRATION: bool = True
+    ADMIN_EMAILS: list[str] = Field(default_factory=list)
+
+    # Free-tier limits (protect the LLM budget and the free hosting quotas)
+    RATE_LIMIT_PER_MINUTE: int = Field(default=20, description="Requests per user per minute")
+    FREE_DAILY_MESSAGES: int = Field(default=50, description="Chat turns per user per UTC day")
+    MAX_MESSAGE_CHARS: int = Field(default=4000)
+
+    # Memory / personalisation
+    MEMORY_EMA_ALPHA: float = Field(default=0.3, gt=0, le=1)
+    MEMORY_DECAY_HALF_LIFE_DAYS: float = Field(default=30.0, gt=0)
+    MEMORY_MAX_UPDATES_PER_MINUTE: int = Field(default=30)
+    MEMORY_QUEUE_SIZE: int = Field(default=1000)
+    MEMORY_MAX_RETRIES: int = Field(default=3)
+
+    # Pedagogy
+    PROMPT_AB_TEST: bool = Field(default=True, description="Split tutor prompt variants by user")
+
+    # Observability
+    LANGSMITH_TRACING: bool = Field(default=False, description="Opt-in: sends traces to a cloud")
+    METRICS_ENABLED: bool = True
 
     @field_validator("LOG_LEVEL")
     @classmethod
@@ -67,6 +154,8 @@ class Settings(BaseSettings):
         """SQLAlchemy's async engine needs asyncpg; accept the common `postgresql://` spelling."""
         if v and v.startswith("postgresql://"):
             return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        if v and v.startswith("postgres://"):  # Heroku/Neon style
+            return v.replace("postgres://", "postgresql+asyncpg://", 1)
         return v
 
 
