@@ -23,6 +23,10 @@ class World:
         self.tmp_path = tmp_path
         self.papers = papers
         self.pg_ids: set[str] = set()  # what "Postgres" contains (stateful across runs)
+        self.pending: set[str] = set()  # stored in Postgres but not yet confirmed in Qdrant
+        self.stored_chunks: dict[str, int] = {}
+        self.dlq_cleared: list[str] = []
+        self.runs: list[tuple[str, dict]] = []
         self.qdrant_ids: set[str] = set()  # what "Qdrant" contains
         self.dlq: list[tuple[str, str]] = []
         self.chunks_per_paper = 3
@@ -45,6 +49,13 @@ class World:
         self.repo.upsert_paper_and_chunks = AsyncMock(side_effect=self._pg_upsert)
         self.repo.delete_paper = AsyncMock(side_effect=self._pg_delete)
         self.repo.log_failure_to_dlq = AsyncMock(side_effect=self._dlq)
+        self.repo.get_index_status = AsyncMock(side_effect=self._status)
+        self.repo.mark_indexed = AsyncMock(side_effect=self._mark)
+        self.repo.load_processed = AsyncMock(side_effect=self._load)
+        self.repo.start_run = AsyncMock(return_value=1)
+        self.repo.finish_run = AsyncMock(
+            side_effect=lambda session, run_id, status, metrics: self.runs.append((status, metrics))
+        )
 
         self.vectors = MagicMock()
         self.vectors.initialize = AsyncMock()
@@ -74,15 +85,40 @@ class World:
         ]
 
     async def _pg_upsert(self, session, processed):
-        if processed.metadata.arxiv_id in self.pg_ids:
+        arxiv_id = processed.metadata.arxiv_id
+        if arxiv_id in self.pg_ids:
             return False
-        self.events.append(f"pg_insert:{processed.metadata.arxiv_id}")
-        self.pg_ids.add(processed.metadata.arxiv_id)
+        self.events.append(f"pg_insert:{arxiv_id}")
+        self.pg_ids.add(arxiv_id)
+        self.pending.add(arxiv_id)
+        self.stored_chunks[arxiv_id] = len(processed.chunks)
         return True
+
+    async def _status(self, session, arxiv_id):
+        if arxiv_id not in self.pg_ids:
+            return None
+        return "pending" if arxiv_id in self.pending else "indexed"
+
+    async def _mark(self, session, arxiv_id):
+        self.events.append(f"pg_mark:{arxiv_id}")
+        self.pending.discard(arxiv_id)
+        self.dlq_cleared.append(arxiv_id)
+
+    async def _load(self, session, arxiv_id):
+        from src.pipeline.models import ProcessedPaper
+
+        n = self.stored_chunks.get(arxiv_id, 3)
+        paper = next(p for p in self.papers if p.arxiv_id == arxiv_id)
+        chunks = [
+            Chunk(chunk_id=f"{arxiv_id}-{i}", paper_id=arxiv_id, section_title="S", content="x")
+            for i in range(n)
+        ]
+        return ProcessedPaper(metadata=paper, sections=[], chunks=chunks)
 
     async def _pg_delete(self, session, arxiv_id):
         self.events.append(f"pg_delete:{arxiv_id}")
         self.pg_ids.discard(arxiv_id)
+        self.pending.discard(arxiv_id)
 
     async def _vector_upsert(self, processed):
         if self.vector_errors:
@@ -242,22 +278,52 @@ async def test_already_stored_paper_is_counted_as_skipped(world):
     assert m.indexed == 3
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "OPEN DESIGN QUESTION: Postgres and Qdrant cannot share a transaction. If Qdrant "
-        "fails after Postgres commits, the retry sees 'paper exists' and never indexes it. "
-        "Decide the source of truth / reconciliation strategy, then remove this marker."
-    ),
-)
 async def test_paper_is_indexed_on_retry_after_vector_store_failure(world):
+    """Postgres and Qdrant cannot share a transaction. A crash between the two writes leaves the
+    paper 'pending' in Postgres (the source of truth); the next run re-embeds it from there."""
     world.papers = world.papers[:1]
     world.vector_errors = [ArxivIndexError("qdrant down", code="VECTOR_UPSERT_ERROR")]
 
-    await _run(world)  # Postgres commits, Qdrant fails
-    await _run(world)  # operator re-runs the same ingestion
+    first = await _run(world)  # Postgres commits as 'pending', Qdrant fails
+    assert first.failed == 1 and world.pending == {"2401.00001v1"}
+    assert world.qdrant_ids == set()
 
-    assert world.qdrant_ids == {"2401.00001v1"}, "paper is stuck in Postgres but not searchable"
+    second = await _run(world)  # operator (or cron) re-runs the same ingestion
+    assert world.qdrant_ids == {"2401.00001v1"}
+    assert world.pending == set()
+    assert second.repaired == 1 and second.indexed == 3
+    assert world.extractor.extract.await_count == 1  # repaired from Postgres, not re-parsed
+    assert "2401.00001v1" in world.dlq_cleared  # a paper that finally succeeded leaves the DLQ
+
+
+async def test_already_indexed_papers_are_not_downloaded_or_parsed_again(world):
+    await _run(world)
+    extracted = world.extractor.extract.await_count
+    await _run(world)
+    assert world.extractor.extract.await_count == extracted
+
+
+async def test_successful_paper_is_marked_indexed_only_after_qdrant(world):
+    world.papers = world.papers[:1]
+    await _run(world)
+    order = [e for e in world.events if "2401.00001v1" in e]
+    assert order.index("vec_insert:2401.00001v1") < order.index("pg_mark:2401.00001v1")
+
+
+async def test_each_run_is_recorded_with_its_metrics(world):
+    world.extract_errors["2401.00002v1"] = ParseError("bad", code="PARSE_STRUCTURE_ERROR")
+    m = await _run(world)
+    [(status, metrics)] = world.runs
+    assert status == "partial"
+    assert metrics["parsed"] == 1 and metrics["failed"] == 1
+    assert metrics["parse_success_rate"] == 0.5 == m.parse_success_rate
+
+
+async def test_a_failed_run_is_still_recorded(world):
+    world.fetcher.fetch_papers = AsyncMock(side_effect=FetchError("down", code="FETCH_API_ERROR"))
+    with pytest.raises(FetchError):
+        await _run(world)
+    assert world.runs[0][0] == "failed"
 
 
 # ---------- re-ingestion (upgrade a stored paper, e.g. PDF parse -> HTML parse) ----------
@@ -285,6 +351,7 @@ async def test_reingest_deletes_only_after_the_new_parse_succeeded(world):
         "vec_delete:2401.00001v1",
         "pg_insert:2401.00001v1",
         "vec_insert:2401.00001v1",
+        "pg_mark:2401.00001v1",
     ]
 
 

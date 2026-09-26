@@ -4,7 +4,17 @@ from datetime import datetime
 from pathlib import Path
 
 import structlog
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Computed,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -58,6 +68,12 @@ class Paper(Base):
     parse_method: Mapped[str | None] = mapped_column(String(16))
     math_fidelity: Mapped[str | None] = mapped_column(String(16))
     parse_stats: Mapped[dict | None] = mapped_column(JSONB)
+    index_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text("'indexed'")
+    )
+    base_id: Mapped[str | None] = mapped_column(
+        String(30), Computed("regexp_replace(arxiv_id, 'v[0-9]+$', '')", persisted=True)
+    )
 
     chunks = relationship("PaperChunk", back_populates="paper", cascade="all, delete-orphan")
 
@@ -105,6 +121,29 @@ class PaperReference(Base):
     ref_key: Mapped[str | None] = mapped_column(String(100))
     text: Mapped[str] = mapped_column(Text, nullable=False)
     urls: Mapped[list | None] = mapped_column(JSONB)
+
+
+class PaperCitation(Base):
+    __tablename__ = "paper_citations"
+
+    citing_id: Mapped[str] = mapped_column(
+        String(30), ForeignKey("papers.arxiv_id", ondelete="CASCADE"), primary_key=True
+    )
+    cited_base_id: Mapped[str] = mapped_column(String(30), primary_key=True)
+    ref_ordinal: Mapped[int | None] = mapped_column(Integer)
+
+
+class IngestionRun(Base):
+    __tablename__ = "ingestion_runs"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    query: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("NOW()")
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(16), server_default=text("'running'"))
+    metrics: Mapped[dict | None] = mapped_column(JSONB)
 
 
 class FailedPaper(Base):

@@ -1,6 +1,6 @@
 import argparse
 import asyncio
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import structlog
@@ -13,7 +13,7 @@ from src.pipeline.extractor import PaperExtractor
 from src.pipeline.fetcher import ArxivFetcher
 from src.pipeline.models import PaperMetadata, ProcessedPaper
 from src.storage.database import dispose_engine, get_async_session, init_db_schema
-from src.storage.repositories import PgRepo
+from src.storage.repositories import INDEXED, PgRepo
 from src.storage.vector_db import VectorStore
 
 logger = structlog.get_logger(__name__)
@@ -27,9 +27,15 @@ class PipelineMetrics:
     parsed: int = 0
     indexed: int = 0  # chunks written
     failed: int = 0
-    skipped: int = 0
+    skipped: int = 0  # already indexed: no download, no parse
+    repaired: int = 0  # stored but never indexed (crash between the two stores): re-embedded
     html: int = 0  # papers parsed from arXiv HTML (formulas are real LaTeX)
     pdf: int = 0  # papers that fell back to PDF (formulas are degraded)
+
+    @property
+    def parse_success_rate(self) -> float | None:
+        attempts = self.parsed + self.failed
+        return round(self.parsed / attempts, 3) if attempts else None
 
 
 async def _record_failure(repo: PgRepo, arxiv_id: str, reason: str) -> None:
@@ -39,6 +45,18 @@ async def _record_failure(repo: PgRepo, arxiv_id: str, reason: str) -> None:
             await repo.log_failure_to_dlq(session, arxiv_id, reason)
     except Exception as e:
         logger.error("Could not write to DLQ", arxiv_id=arxiv_id, error=str(e))
+
+
+async def index_from_store(repo: PgRepo, vector_store: VectorStore, arxiv_id: str) -> int:
+    """Re-embed a paper from Postgres (the source of truth) and mark it indexed. Returns chunks."""
+    async with get_async_session() as session:
+        processed = await repo.load_processed(session, arxiv_id)
+    if processed is None:
+        return 0
+    await vector_store.upsert_vectors(processed)
+    async with get_async_session() as session:
+        await repo.mark_indexed(session, arxiv_id)
+    return len(processed.chunks)
 
 
 async def run_pipeline(
@@ -58,14 +76,16 @@ async def run_pipeline(
     vector_store = VectorStore()
     await vector_store.initialize()
     db_repo = PgRepo()
+    async with get_async_session() as session:
+        run_id = await db_repo.start_run(session, query)
 
     # Pipeline components
     fetcher = ArxivFetcher()
     extractor = PaperExtractor(fetcher, cache)
     chunker = TextChunker()
 
-    logger.info("Pipeline started", query=query, max_papers=max_papers, reingest=reingest)
-
+    logger.info("Pipeline started", run_id=run_id, query=query, max_papers=max_papers)
+    status = "failed"
     try:
         papers = await fetcher.fetch_papers(query=query, max_results=max_papers)
         metrics.fetched = len(papers)
@@ -74,8 +94,15 @@ async def run_pipeline(
             await _process_paper(
                 paper, extractor, chunker, db_repo, vector_store, metrics, reingest
             )
+        status = "succeeded" if metrics.failed == 0 else "partial"
     finally:
-        logger.info("Pipeline finished", metrics=vars(metrics))
+        report = {**asdict(metrics), "parse_success_rate": metrics.parse_success_rate}
+        logger.info("Pipeline finished", run_id=run_id, status=status, metrics=report)
+        try:
+            async with get_async_session() as session:
+                await db_repo.finish_run(session, run_id, status, report)
+        except Exception as e:
+            logger.error("Could not record ingestion run", run_id=run_id, error=str(e))
         await fetcher.aclose()
         await vector_store.close()
         await dispose_engine()
@@ -92,9 +119,29 @@ async def _process_paper(
     metrics: PipelineMetrics,
     reingest: bool = False,
 ) -> None:
-    """One paper end to end. Failures are isolated: they go to the DLQ, never abort the run."""
+    """One paper end to end. Failures are isolated: they go to the DLQ, never abort the run.
+
+    Consistency contract (Postgres = source of truth, Qdrant = derived index):
+      not stored          -> parse, write Postgres as 'pending', write Qdrant, mark 'indexed'
+      stored, 'pending'   -> a previous run died between the two writes: re-embed from Postgres
+      stored, 'indexed'   -> nothing to do (no download, no parse)
+    """
     try:
         logger.info("Processing paper", arxiv_id=paper.arxiv_id)
+        async with get_async_session() as session:
+            status = await db_repo.get_index_status(session, paper.arxiv_id)
+
+        if status is not None and not reingest:
+            if status == INDEXED:
+                metrics.skipped += 1
+                logger.info("Already indexed, skipping", arxiv_id=paper.arxiv_id)
+                return
+            chunks = await index_from_store(db_repo, vector_store, paper.arxiv_id)
+            metrics.repaired += 1
+            metrics.indexed += chunks
+            logger.info("Repaired pending paper from Postgres", arxiv_id=paper.arxiv_id)
+            return
+
         doc = await extractor.extract(paper)
         metrics.parsed += 1
         if doc.method == "html":
@@ -119,30 +166,29 @@ async def _process_paper(
             parse_stats=doc.stats,
         )
 
-        if reingest:
+        if reingest and status is not None:
             # Only after the new parse succeeded, so a bad re-parse never destroys good data.
             async with get_async_session() as session:
                 await db_repo.delete_paper(session, paper.arxiv_id)
             await vector_store.delete_paper(paper.arxiv_id)
 
-        # NOTE: Postgres and Qdrant cannot share a transaction. Postgres is written first, so a
-        # Qdrant failure leaves a paper that a re-run will skip (see the xfail test in
-        # tests/test_runner.py for the open design question).
         async with get_async_session() as session:
             inserted = await db_repo.upsert_paper_and_chunks(session, processed)
-
-        if inserted:
-            await vector_store.upsert_vectors(processed)
-            metrics.indexed += len(chunks)
-            logger.info(
-                "Paper indexed",
-                arxiv_id=paper.arxiv_id,
-                chunks=len(chunks),
-                method=doc.method,
-                equations=len(doc.equations),
-            )
-        else:
+        if not inserted:  # a concurrent run stored it between our check and our insert
             metrics.skipped += 1
+            return
+
+        await vector_store.upsert_vectors(processed)
+        async with get_async_session() as session:
+            await db_repo.mark_indexed(session, paper.arxiv_id)
+        metrics.indexed += len(chunks)
+        logger.info(
+            "Paper indexed",
+            arxiv_id=paper.arxiv_id,
+            chunks=len(chunks),
+            method=doc.method,
+            equations=len(doc.equations),
+        )
 
     except (FetchError, ParseError, IndexError) as e:
         metrics.failed += 1

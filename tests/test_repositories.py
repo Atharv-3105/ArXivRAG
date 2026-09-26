@@ -135,3 +135,59 @@ async def test_delete_paper_removes_the_row_and_commits():
     await PgRepo().delete_paper(session, "2401.00001v1")
     assert _sql(session.execute.await_args.args[0]).startswith("DELETE FROM papers")
     session.commit.assert_awaited_once()
+
+
+# ---------- index status (Postgres <-> Qdrant consistency), citation edges, run audit
+
+
+async def test_new_paper_is_stored_as_pending_until_qdrant_confirms(processed):
+    session = _session(existing=False)
+    await PgRepo().upsert_paper_and_chunks(session, processed)
+    paper_stmt = session.execute.await_args_list[1].args[0]
+    params = paper_stmt.compile(dialect=postgresql.dialect()).params
+    assert params["index_status"] == "pending"
+
+
+async def test_mark_indexed_flips_status_and_clears_the_dead_letter_entry():
+    session = AsyncMock()
+    await PgRepo().mark_indexed(session, "2401.00001v1")
+    update_sql, dlq_sql = (_sql(c.args[0]) for c in session.execute.await_args_list)
+    assert update_sql.startswith("UPDATE papers") and "index_status" in update_sql
+    assert dlq_sql.startswith("DELETE FROM failed_papers")
+    session.commit.assert_awaited_once()  # both or neither
+
+
+async def test_arxiv_references_become_citation_edges_in_the_same_transaction(make_paper):
+    from src.pipeline.models import Reference
+
+    paper = make_paper("2401.00003v1")
+    processed = ProcessedPaper(
+        metadata=paper,
+        sections=[],
+        chunks=[Chunk(chunk_id="c0", paper_id=paper.arxiv_id, section_title="S", content="t")],
+        references=[Reference(ordinal=1, text="Attention is all you need. arXiv:1706.03762")],
+    )
+    session = _session(existing=False)
+    await PgRepo().upsert_paper_and_chunks(session, processed)
+    edge_sql = _sql(session.execute.await_args_list[-1].args[0])
+    assert edge_sql.startswith("INSERT INTO paper_citations")
+    assert "ON CONFLICT DO NOTHING" in edge_sql
+    session.commit.assert_awaited_once()
+
+
+async def test_references_without_arxiv_ids_write_no_edges(processed_with_math):
+    session = _session(existing=False)
+    await PgRepo().upsert_paper_and_chunks(session, processed_with_math)
+    assert not any(
+        "paper_citations" in _sql(c.args[0]) for c in session.execute.await_args_list[1:]
+    )
+
+
+async def test_ingestion_run_lifecycle():
+    session = AsyncMock()
+    session.execute.return_value = MagicMock(**{"scalar_one.return_value": 7})
+    repo = PgRepo()
+    assert await repo.start_run(session, "cat:cs.LG") == 7
+    await repo.finish_run(session, 7, "succeeded", {"parsed": 3})
+    finish_sql = _sql(session.execute.await_args.args[0])
+    assert finish_sql.startswith("UPDATE ingestion_runs") and "finished_at" in finish_sql
