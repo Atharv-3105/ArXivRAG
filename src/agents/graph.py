@@ -162,7 +162,14 @@ def build_graph(deps: ChatDeps):
         sources = state.get("sources", [])
         history = state.get("history", [])[-settings.CHAT_HISTORY_MESSAGES :]
         request = LLMRequest(
-            messages=build_messages(state["query"], state["intent"], sources, history),
+            messages=build_messages(
+                state["query"],
+                state["intent"],
+                sources,
+                history,
+                state.get("profile"),
+                state.get("mastery"),
+            ),
             task="tutor" if state["intent"] == "learn" else "default",
             max_tokens=settings.LLM_MAX_TOKENS,
             temperature=settings.LLM_TEMPERATURE,

@@ -33,6 +33,8 @@ def install_error_handlers(app: FastAPI) -> None:
         retry_after = retry_after_of(exc)
         if retry_after is not None:
             headers["Retry-After"] = str(retry_after)
+        if exc.status_code == 401:
+            headers["WWW-Authenticate"] = "Bearer"  # RFC 6750
         level = logger.error if exc.status_code >= 500 else logger.info
         level("Request failed", code=exc.code, status=exc.status_code, error=exc.message)
         return JSONResponse(

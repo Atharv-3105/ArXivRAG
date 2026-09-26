@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.api.app import create_app
-from tests.chat_fakes import RETRIEVAL_DOWN, DeadAdapter, hit, make_services
+from tests.chat_fakes import RETRIEVAL_DOWN, DeadAdapter, hit, make_services, signup
 
 
 @pytest.fixture
@@ -16,7 +16,24 @@ def services():
 @pytest.fixture
 def api(services):
     with TestClient(create_app(services=services)) as client:
+        client.headers.update(signup(client))
         yield client
+
+
+def _authed(services):
+    """A signed-in client for a one-off app (use as a context manager)."""
+
+    class _Ctx:
+        def __enter__(self):
+            self.cm = TestClient(create_app(services=services))
+            client = self.cm.__enter__()
+            client.headers.update(signup(client))
+            return client
+
+        def __exit__(self, *exc):
+            return self.cm.__exit__(*exc)
+
+    return _Ctx()
 
 
 def _events(response) -> list[tuple[str, dict]]:
@@ -42,7 +59,7 @@ def test_conversation_history_is_kept_between_turns(api, services):
     first = api.post("/api/v1/chat", json={"message": "Explain QLoRA"}).json()
     cid = first["conversation_id"]
     api.post("/api/v1/chat", json={"message": "and its limits?", "conversation_id": cid})
-    stored = services.conversations.data[cid]
+    stored = services.conversations.data[cid]  # user-scoped store
     assert [m["role"] for m in stored] == ["user", "assistant", "user", "assistant"]
     assert stored[1]["citations"] and stored[1]["intent"] == "learn"
     last_prompt = services.llm.slots[0].adapter.requests[-1].messages
@@ -65,7 +82,7 @@ def test_stream_protocol(api):
 
 def test_stream_reports_llm_outage_as_an_error_event():
     services = make_services([hit("p", 0)], adapter=DeadAdapter())
-    with TestClient(create_app(services=services)) as client:
+    with _authed(services) as client:
         events = _events(client.post("/api/v1/chat/stream", json={"message": "Explain LoRA"}))
     name, data = events[-1]
     assert name == "error" and data["code"] == "LLM_UNAVAILABLE"
@@ -75,7 +92,7 @@ def test_stream_reports_llm_outage_as_an_error_event():
 
 def test_chat_maps_llm_outage_to_503_with_retry_after():
     services = make_services([hit("p", 0)], adapter=DeadAdapter())
-    with TestClient(create_app(services=services)) as client:
+    with _authed(services) as client:
         r = client.post("/api/v1/chat", json={"message": "Explain LoRA"})
     assert r.status_code == 503
     assert int(r.headers["retry-after"]) >= 1
@@ -84,7 +101,7 @@ def test_chat_maps_llm_outage_to_503_with_retry_after():
 
 
 def test_retrieval_outage_degrades_instead_of_failing():
-    with TestClient(create_app(services=make_services(retrieval_error=RETRIEVAL_DOWN))) as client:
+    with _authed(make_services(retrieval_error=RETRIEVAL_DOWN)) as client:
         body = client.post("/api/v1/chat", json={"message": "Explain LoRA"}).json()
     assert body["degraded"] == "retrieval_unavailable" and body["provider"] == "none"
 
@@ -105,6 +122,7 @@ def test_history_outage_does_not_block_the_answer(services):
 
     services.conversations.history = broken
     services.conversations.append = broken
-    with TestClient(create_app(services=services)) as client:
+    services.conversations.count_user_messages_since = broken  # quota check fails open
+    with _authed(services) as client:
         r = client.post("/api/v1/chat", json={"message": "Explain LoRA"})
     assert r.status_code == 200 and r.json()["answer"]

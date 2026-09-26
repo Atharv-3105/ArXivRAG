@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.errors import install_error_handlers
-from src.api.routes import chat, health
+from src.api.routes import auth, chat, health, me
 from src.api.services import Services, create_services
 from src.core.config import settings
 from src.core.logging import TraceIDMiddleware, setup_logging
@@ -26,12 +26,15 @@ def create_app(services: Services | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         owned = services is None
         app.state.services = services or await create_services()
+        await app.state.services.start()  # MemoryManager worker
         logger.info("Application ready")
         try:
             yield
         finally:
             if owned:
                 await app.state.services.aclose()
+            elif app.state.services.memory is not None:
+                await app.state.services.memory.stop()
 
     app = FastAPI(
         title=settings.APP_NAME,
@@ -54,7 +57,9 @@ def create_app(services: Services | None = None) -> FastAPI:
 
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(health.router)  # root health for load balancers
+    app.include_router(auth.router, prefix="/api/v1")
     app.include_router(chat.router, prefix="/api/v1")
+    app.include_router(me.router, prefix="/api/v1")
     return app
 
 

@@ -3,6 +3,7 @@ import os
 # Settings() runs at import time and requires SECRET_KEY, so env must be set before any src import.
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-production")
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
+os.environ.setdefault("BCRYPT_ROUNDS", "4")  # the minimum: hashing speed is not under test
 
 from datetime import UTC, datetime  # noqa: E402
 

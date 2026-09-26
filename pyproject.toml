@@ -19,6 +19,8 @@ dependencies = [
     "fastembed",  # dense (bge-small) + BM25 sparse embeddings on ONNX Runtime: no PyTorch
     "langgraph",
     "langsmith",  # optional tracing; inert unless LANGSMITH_TRACING=true
+    "pyjwt",
+    "bcrypt",
 ]
 
 [dependency-groups]
@@ -58,6 +60,10 @@ select = [
     "UP",  # pyupgrade
     "ASYNC", # blocking calls inside async functions
 ]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom: these defaults are markers, evaluated once, never mutated.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
 
 [tool.ruff.lint.per-file-ignores]
 # Fixtures embed HTML/LaTeX strings that are clearer unwrapped; fakes may do blocking file I/O.

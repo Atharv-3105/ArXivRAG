@@ -4,15 +4,20 @@ Tests build a `Services` with fakes and hand it to `create_app(services=...)`, s
 Qdrant, Postgres or an API key.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
 
 from src.agents.graph import ChatDeps, Retriever, build_graph
+from src.api.limits import SlidingWindowLimiter
+from src.auth.users import PgUserStore, UserStore
+from src.core.config import settings
 from src.core.exceptions import IndexError
 from src.llm.registry import build_router
 from src.llm.router import LLMRouter
+from src.memory.manager import MemoryManager
+from src.memory.store import PgProfileStore, ProfileStore
 from src.storage.conversations import ConversationStore, PgConversationStore
 from src.storage.vector_db import VectorStore
 
@@ -24,13 +29,27 @@ class Services:
     llm: LLMRouter
     retriever: Retriever  # VectorStore in production
     conversations: ConversationStore
+    users: UserStore
+    profiles: ProfileStore
+    memory: MemoryManager | None = None
+    limiter: SlidingWindowLimiter = field(
+        default_factory=lambda: SlidingWindowLimiter(settings.RATE_LIMIT_PER_MINUTE)
+    )
     graph: Any = None  # compiled LangGraph
 
     def __post_init__(self) -> None:
         if self.graph is None:
             self.graph = build_graph(ChatDeps(llm=self.llm, retriever=self.retriever))
+        if self.memory is None:
+            self.memory = MemoryManager(self.profiles)
+
+    async def start(self) -> None:
+        assert self.memory is not None
+        self.memory.start()  # needs the running event loop, hence not in __post_init__
 
     async def aclose(self) -> None:
+        if self.memory is not None:
+            await self.memory.stop()
         await self.llm.aclose()
         close = getattr(self.retriever, "close", None)
         if close is not None:
@@ -56,4 +75,10 @@ async def create_services() -> Services:
     except Exception as e:
         logger.error("Qdrant unavailable at startup; answers will degrade", error=str(e))
 
-    return Services(llm=build_router(), retriever=store, conversations=PgConversationStore())
+    return Services(
+        llm=build_router(),
+        retriever=store,
+        conversations=PgConversationStore(),
+        users=PgUserStore(),
+        profiles=PgProfileStore(),
+    )

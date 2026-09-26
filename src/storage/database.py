@@ -5,6 +5,7 @@ from pathlib import Path
 
 import structlog
 from sqlalchemy import (
+    REAL,
     BigInteger,
     Boolean,
     Computed,
@@ -146,10 +147,90 @@ class IngestionRun(Base):
     metrics: Mapped[dict | None] = mapped_column(JSONB)
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    display_name: Mapped[str | None] = mapped_column(String(100))
+    is_admin: Mapped[bool] = mapped_column(Boolean, server_default=text("FALSE"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("NOW()")
+    )
+
+
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    profile: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    locked: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    version: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("NOW()")
+    )
+
+
+class ConceptMastery(Base):
+    __tablename__ = "concept_mastery"
+
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    concept: Mapped[str] = mapped_column(String(80), primary_key=True)
+    mastery: Mapped[float] = mapped_column(REAL, nullable=False)
+    evidence: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    locked: Mapped[bool] = mapped_column(Boolean, server_default=text("FALSE"))
+    ease: Mapped[float] = mapped_column(REAL, server_default=text("2.5"))
+    interval_days: Mapped[float] = mapped_column(REAL, server_default=text("0"))
+    reviews: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    next_review_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("NOW()")
+    )
+
+
+class UserEvent(Base):
+    __tablename__ = "user_events"
+
+    event_id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("NOW()")
+    )
+
+
+class ProfileAudit(Base):
+    __tablename__ = "profile_audit"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    field: Mapped[str] = mapped_column(String(120), nullable=False)
+    old_value: Mapped[object | None] = mapped_column(JSONB)
+    new_value: Mapped[object | None] = mapped_column(JSONB)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    event_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("NOW()")
+    )
+
+
 class Conversation(Base):
     __tablename__ = "conversations"
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE")
+    )
     title: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("NOW()")

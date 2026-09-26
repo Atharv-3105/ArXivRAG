@@ -31,6 +31,9 @@ class AgentState(TypedDict, total=False):
     # input
     query: str
     history: list[dict]  # [{"role": "user"|"assistant", "content": str}], oldest first
+    profile: dict  # expertise_level, math_depth, goals (Phase 3); {} for defaults
+    mastery: dict[str, float]  # concept -> effective mastery, for concepts in this query
+    concepts: list[str]  # concepts the query is about (vocabulary slugs)
     # classify
     intent: Intent
     intent_confidence: float

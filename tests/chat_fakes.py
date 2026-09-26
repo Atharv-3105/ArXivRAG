@@ -1,10 +1,12 @@
 """Offline stand-ins for the chat loop: a real LLMRouter over fake adapters, a scripted retriever."""
 
 from src.api.services import Services
+from src.auth.users import InMemoryUserStore
 from src.core.exceptions import RetrievalError
 from src.llm.base import ErrorKind, LLMRequest, ProviderError
 from src.llm.mock import MockAdapter
 from src.llm.router import LLMRouter, ProviderLimits
+from src.memory.store import InMemoryProfileStore
 from src.storage.conversations import InMemoryConversationStore
 from src.storage.vector_db import SearchHit
 
@@ -73,7 +75,17 @@ def make_services(hits=None, retrieval_error=None, adapter=None) -> Services:
         llm=router(adapter),
         retriever=FakeRetriever(hits, retrieval_error),
         conversations=InMemoryConversationStore(),
+        users=InMemoryUserStore(),
+        profiles=InMemoryProfileStore(),
     )
+
+
+def signup(client, email: str = "ada@example.com", password: str = "correct horse") -> dict:
+    """Register (or log in) and return the Authorization header."""
+    r = client.post("/api/v1/auth/register", json={"email": email, "password": password})
+    if r.status_code == 409:
+        r = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 
 RETRIEVAL_DOWN = RetrievalError("qdrant down", code="VECTOR_SEARCH_ERROR")

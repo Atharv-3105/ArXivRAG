@@ -136,6 +136,7 @@ class Settings(BaseSettings):
     # Auth / SaaS
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_TTL_MINUTES: int = Field(default=60 * 24)
+    BCRYPT_ROUNDS: int = Field(default=12, ge=4, le=16, description="Password hash cost (2^n)")
     ALLOW_REGISTRATION: bool = True
     ADMIN_EMAILS: list[str] = Field(default_factory=list)
 
@@ -150,6 +151,7 @@ class Settings(BaseSettings):
     MEMORY_MAX_UPDATES_PER_MINUTE: int = Field(default=30)
     MEMORY_QUEUE_SIZE: int = Field(default=1000)
     MEMORY_MAX_RETRIES: int = Field(default=3)
+    PROFILE_CONCEPTS_IN_PROMPT: int = Field(default=6, description="Mastery entries shown to LLM")
 
     # Pedagogy
     PROMPT_AB_TEST: bool = Field(default=True, description="Split tutor prompt variants by user")

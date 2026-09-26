@@ -8,7 +8,7 @@ quality can be compared across versions from day one.
 from src.agents.state import Intent, Source
 from src.llm.base import ChatMessage
 
-PROMPT_VERSION = "chat-v1"
+PROMPT_VERSION = "chat-v2"  # v2: reader profile block (Phase 3)
 
 _BASE = """You are ArXivMind, a research assistant for AI/ML papers.
 
@@ -57,10 +57,47 @@ def format_sources(sources: list[Source]) -> str:
     return "\n\n".join(blocks)
 
 
+_LEVEL = {
+    "beginner": "a beginner: define every term, prefer analogies, introduce notation gently",
+    "intermediate": "comfortable with ML basics: skip fundamentals, explain the key idea precisely",
+    "advanced": "an expert: be dense and technical, focus on subtleties and trade-offs",
+}
+_MATH = {
+    "light": "Keep formulas to a minimum; explain in words.",
+    "standard": "Use formulas where they help, and explain each symbol.",
+    "rigorous": "Use full mathematical detail and precise statements.",
+}
+
+
+def reader_block(profile: dict, mastery: dict[str, float]) -> str:
+    """How to pitch the answer. Empty when we know nothing about the reader."""
+    if not profile:
+        return ""
+    level = _LEVEL.get(profile.get("expertise_level", ""), _LEVEL["intermediate"])
+    lines = [f"The reader is {level}.", _MATH.get(profile.get("math_depth", ""), _MATH["standard"])]
+    if profile.get("goals"):
+        lines.append("Their goals: " + "; ".join(profile["goals"][:3]) + ".")
+    strong = [c.replace("_", " ") for c, m in mastery.items() if m >= 0.7]
+    weak = [c.replace("_", " ") for c, m in mastery.items() if m < 0.35]
+    if strong:
+        lines.append("They already know: " + ", ".join(strong) + " (do not re-explain).")
+    if weak:
+        lines.append("Still shaky on: " + ", ".join(weak) + " (explain these carefully).")
+    return "\n\nReader:\n" + "\n".join(f"- {line}" for line in lines)
+
+
 def build_messages(
-    query: str, intent: Intent, sources: list[Source], history: list[dict]
+    query: str,
+    intent: Intent,
+    sources: list[Source],
+    history: list[dict],
+    profile: dict | None = None,
+    mastery: dict[str, float] | None = None,
 ) -> list[ChatMessage]:
-    system = f"{_BASE}\n\nTask: {_INTENT[intent]}\n\nSources:\n{format_sources(sources)}"
+    system = (
+        f"{_BASE}\n\nTask: {_INTENT[intent]}{reader_block(profile or {}, mastery or {})}"
+        f"\n\nSources:\n{format_sources(sources)}"
+    )
     messages = [ChatMessage("system", system)]
     for m in history:
         if m["role"] in ("user", "assistant") and m["content"]:

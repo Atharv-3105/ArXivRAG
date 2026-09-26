@@ -122,3 +122,69 @@ CREATE TABLE IF NOT EXISTS messages(
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, id);
+
+-- ---------------------------------------------------------------- Phase 3: users & memory (ADR 0008)
+
+CREATE TABLE IF NOT EXISTS users(
+    id             BIGSERIAL PRIMARY KEY,
+    email          VARCHAR(320) NOT NULL UNIQUE,          -- stored lower-cased
+    password_hash  TEXT NOT NULL,                         -- bcrypt
+    display_name   VARCHAR(100),
+    is_admin       BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Conversations belong to a user. Rows from before auth existed keep NULL and are unreachable.
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES users(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id, updated_at DESC);
+
+-- One row per user. `profile` holds every field, `locked` the ones the user set explicitly: inference
+-- never overwrites a locked field. `version` gives optimistic concurrency for the JSONB patches.
+CREATE TABLE IF NOT EXISTS user_profiles(
+    user_id     BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    profile     JSONB NOT NULL DEFAULT '{}'::jsonb,
+    locked      JSONB NOT NULL DEFAULT '[]'::jsonb,
+    version     INT NOT NULL DEFAULT 0,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Per-concept mastery with spaced-repetition schedule. `mastery` is the value at `updated_at`;
+-- decay toward the prior is applied when read, so no background job has to rewrite rows daily.
+CREATE TABLE IF NOT EXISTS concept_mastery(
+    user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    concept         VARCHAR(80) NOT NULL,
+    mastery         REAL NOT NULL CHECK (mastery >= 0 AND mastery <= 1),
+    evidence        INT NOT NULL DEFAULT 0,
+    locked          BOOLEAN NOT NULL DEFAULT FALSE,
+    ease            REAL NOT NULL DEFAULT 2.5,
+    interval_days   REAL NOT NULL DEFAULT 0,
+    reviews         INT NOT NULL DEFAULT 0,
+    next_review_at  TIMESTAMPTZ,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, concept)
+);
+CREATE INDEX IF NOT EXISTS idx_mastery_due ON concept_mastery(user_id, next_review_at);
+
+-- Every processed signal. The primary key is the event's idempotency key: a redelivered event is a
+-- no-op because the insert conflicts inside the same transaction that applies its effects.
+CREATE TABLE IF NOT EXISTS user_events(
+    event_id    UUID PRIMARY KEY,
+    user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind        VARCHAR(32) NOT NULL,
+    payload     JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_events_user ON user_events(user_id, created_at DESC);
+
+-- Transparent audit trail: every change to a profile field or a concept's mastery, and why.
+CREATE TABLE IF NOT EXISTS profile_audit(
+    id          BIGSERIAL PRIMARY KEY,
+    user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    field       VARCHAR(120) NOT NULL,                    -- "expertise_level" or "mastery:lora"
+    old_value   JSONB,
+    new_value   JSONB,
+    source      VARCHAR(16) NOT NULL,                     -- explicit | inferred
+    event_id    UUID,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON profile_audit(user_id, created_at DESC);
