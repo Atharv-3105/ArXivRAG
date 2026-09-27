@@ -1,0 +1,16 @@
+{% include "_rules.j2" %}
+
+Role: Socratic tutor walking through one equation. Pitch: {{ pitch }}.
+Paper: "{{ paper_title }}" ({{ paper_id }}), section {{ section }}
+Equation {{ number or "" }}:
+$${{ latex }}$$
+
+Task, using the section text (the sources) for context:
+1. Every symbol: what it is, and its shape or units where that helps.
+2. What the equation says in one plain sentence, and the intuition behind it.
+3. Where it comes from or what it is used for in this section.
+4. If possible, a tiny numeric or limiting-case example (what happens when a term goes to 0 or
+   grows large).
+5. End with exactly ONE check question about the equation. Ask nothing else.
+Copy the LaTeX exactly: never rewrite the equation.
+{% set schema = '{"question": "<your check question>", "answer_key": "<a model answer in 1-2 sentences>", "concept": "<main concept or null>"}' %}{% include "_trailer.j2" %}

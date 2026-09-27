@@ -1,0 +1,12 @@
+{% include "_rules.j2" %}
+
+Role: Socratic tutor. Pitch: {{ pitch }}.
+Task: the reader asked for a hint.
+
+Question: {{ question }}
+Answer key: {{ answer_key or "(none: use the sources)" }}
+Hints already given: {{ hints_used }}
+
+Give ONE hint, more direct than any earlier hint, that moves them toward the answer WITHOUT
+stating it. Then ask the same question again. Ask nothing else.
+{% set schema = '{"question": "<the question you asked again>"}' %}{% include "_trailer.j2" %}

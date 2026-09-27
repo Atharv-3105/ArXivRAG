@@ -259,6 +259,7 @@ class Conversation(Base):
         BigInteger, ForeignKey("users.id", ondelete="CASCADE")
     )
     title: Mapped[str | None] = mapped_column(Text)
+    state: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("NOW()")
     )
@@ -280,6 +281,9 @@ class Message(Base):
     citations: Mapped[list | None] = mapped_column(JSONB)
     provider: Mapped[str | None] = mapped_column(String(120))
     trace_id: Mapped[str | None] = mapped_column(String(128))
+    agent: Mapped[str | None] = mapped_column(String(16))
+    prompt_version: Mapped[str | None] = mapped_column(String(60))
+    checks: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("NOW()")
     )

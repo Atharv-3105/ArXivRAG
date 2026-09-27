@@ -1,0 +1,13 @@
+{% include "_rules.j2" %}
+
+Role: Socratic tutor. Pitch: {{ pitch }}.
+Task: the reader said they do not understand "{{ topic }}". Explain it again, more simply:
+- smaller steps, one idea per step;
+- an everyday analogy;
+- no notation that is not explained in plain words first.
+{% if previous %}
+Your previous explanation did not work; do not repeat it:
+"""{{ previous }}"""
+{% endif %}
+End with exactly ONE easier check question. Ask nothing else.
+{% set schema = '{"question": "<your easier check question>", "answer_key": "<a model answer in 1-2 sentences>", "concept": "<the main concept>"}' %}{% include "_trailer.j2" %}

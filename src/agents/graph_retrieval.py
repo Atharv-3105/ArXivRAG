@@ -18,6 +18,7 @@ plain vector result on any failure):
 import re
 from datetime import UTC, date, datetime
 
+from src.agents.sources import to_source
 from src.agents.state import Source
 from src.core.config import settings
 from src.storage.vector_db import SearchHit
@@ -93,21 +94,6 @@ def rerank(
     return [hit for _, hit in sorted(enumerate(hits), key=score, reverse=True)]
 
 
-def _source(n: int, hit: SearchHit, role: str, url: str) -> Source:
-    return Source(
-        n=n,
-        chunk_id=hit.chunk_id,
-        paper_id=hit.paper_id,
-        title=hit.title,
-        section=hit.section,
-        content=hit.content,
-        score=round(hit.score, 4),
-        url=url,
-        math_fidelity=hit.metadata.get("math_fidelity", "degraded"),
-        role=role,
-    )
-
-
 async def expand(
     intent: str,
     query: str,
@@ -115,7 +101,6 @@ async def expand(
     level: str | None,
     graph,
     retriever,
-    url_for,
 ) -> list[Source]:
     """Extra sources from the citation graph, numbered after the existing ones."""
     if not sources:
@@ -134,7 +119,7 @@ async def expand(
             if hit.paper_id in seen or len(seen) >= budget:
                 continue
             seen.add(hit.paper_id)
-            extra.append(_source(len(sources) + len(extra) + 1, hit, role, url_for(hit)))
+            extra.append(to_source(len(sources) + len(extra) + 1, hit, role))
 
     if intent == "learn" and level == "weak":
         chain = await graph.prerequisites(top[0], settings.GRAPH_MAX_DEPTH, budget * 2)
@@ -159,6 +144,7 @@ async def expand(
                         url=f"https://arxiv.org/abs/{ctx['citing_id']}",
                         math_fidelity="latex",
                         role="citation_context",
+                        published=None,
                     )
                 )
     elif intent == "synthesize":

@@ -35,7 +35,7 @@ async def test_question_is_classified_retrieved_answered_and_cited():
     assert state["response"] and state["citations"]  # the mock quotes and cites [1], [2]
     assert state["ungrounded"] == []
     assert state["provider"] == "mock"
-    assert set(state["timings"]) == {"classify", "retrieve", "generate"}
+    assert set(state["timings"]) == {"route", "retrieve", "tutor"}
     system = adapter.requests[0].messages[0].content
     assert "[1] LoRA injects" in system and "Answer ONLY from the numbered sources" in system
     assert adapter.requests[0].task == "tutor"  # 'learn' uses the tutor provider order

@@ -1,0 +1,18 @@
+{% include "_rules.j2" %}
+
+Role: research synthesizer.
+Task: compare the work in the sources for: "{{ topic }}". Use exactly these Markdown sections:
+
+## Comparison
+A Markdown table with columns: Paper | Approach | Key result | Setting. One row per paper, each
+row cited, e.g. [3].
+## Where they agree
+## Where they disagree
+Cite both sides of every disagreement.
+## Timeline
+How the ideas developed, oldest first, using the publication years shown with the sources.
+## Open directions
+
+Rules for the synthesis:
+- Do not treat different setups (data, scale, metric) as directly comparable; say so in Setting.
+- Use at least two different papers; if the sources cover only one, say so and stop.

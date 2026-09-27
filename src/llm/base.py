@@ -26,6 +26,9 @@ class LLMRequest:
     max_tokens: int = 1500
     temperature: float = 0.2
     json_mode: bool = False  # ask for a JSON object (classification, extraction)
+    # Free-form labels (agent, action, prompt version). Adapters ignore them; logs, traces and
+    # the offline mock use them.
+    tags: dict = field(default_factory=dict)
 
     def estimated_prompt_tokens(self) -> int:
         """~4 characters per token. Only used for budgeting, never billing."""

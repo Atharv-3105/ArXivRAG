@@ -214,3 +214,13 @@ CREATE TABLE IF NOT EXISTS paper_influence(
 );
 CREATE INDEX IF NOT EXISTS idx_influence_rank ON paper_influence(pagerank DESC);
 CREATE INDEX IF NOT EXISTS idx_citations_citing ON paper_citations(citing_id);
+
+-- ---------------------------------------------------------------- Phase 5: agents (ADR 0010)
+
+-- Per-conversation agent state (the tutor session: pending question, hints, reading position).
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS state JSONB;
+-- Which specialist answered, with which prompt template version (A/B), and its output checks.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS agent VARCHAR(16);
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS prompt_version VARCHAR(60);
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS checks JSONB;
+CREATE INDEX IF NOT EXISTS idx_messages_prompt ON messages(prompt_version) WHERE prompt_version IS NOT NULL;

@@ -10,7 +10,8 @@ Clients          Web UI · CLI                                          (Phase 2
 API              FastAPI · JWT auth · per-user limits · /chat, /chat/stream (SSE), /me, /feedback
                  trace-id middleware · typed errors → HTTP                   [ADR 0006]
                      │
-Agentic core     LangGraph: classify → retrieve (hybrid, RRF, + graph) → generate [ADR 0005, 0009]
+Agentic core     LangGraph: route → retrieve (hybrid, RRF, + graph) → specialist   [ADR 0005, 0009, 0010]
+                 specialists: tutor (stateful, Socratic) · critic · synthesizer · advisor · general
                  (specialists: Phase 5, guardrail: Phase 6)
                  LLM router: N free providers, failover, budgets, breakers   [ADR 0004]
                  MemoryManager: async queue → learner model → profile/mastery [ADR 0008]
@@ -33,7 +34,7 @@ Background       python -m src.pipeline.runner (cron) · reindex (reconciler)  [
 | Citation contexts (sentence + function) | Postgres `citation_contexts` | pipeline, same transaction | yes, by re-parsing cached HTML |
 | Influence (PageRank) | Postgres `paper_influence` | after each run / reindex | yes, recomputed |
 | Dense + BM25 vectors + payload | Qdrant | pipeline / `reindex` | **yes, from Postgres** |
-| Conversations, messages (per user) | Postgres | chat API, best effort | no |
+| Conversations, messages (per user), tutor session state, prompt versions, checks | Postgres | chat API, best effort | no |
 | Users, profiles, concept mastery | Postgres | auth, `/me`, MemoryManager | no |
 | Processed events, profile audit | Postgres `user_events`, `profile_audit` | MemoryManager | no |
 | Failed papers | Postgres `failed_papers` (DLQ) | pipeline | n/a |
@@ -49,6 +50,7 @@ Background       python -m src.pipeline.runner (cron) · reindex (reconciler)  [
 | LangGraph checkpointing | Stateless graph per turn, history in Postgres tables | Queryable history (UI, GDPR, evals), survives restarts | [0007](adr/0007-conversation-state-in-postgres.md) |
 | Redis for sessions, rate limits, hot profiles | Stateless JWT; in-process windows; Postgres reads; daily quota in Postgres | One free instance; no extra service or hop | [0006](adr/0006-single-instance-in-process-state.md) |
 | Celery/RQ worker, partitioned audit | In-process asyncio queue + transactional apply; indexed audit | One container; volume too low to partition | [0008](adr/0008-learner-model-and-memory-pipeline.md) |
+| Tutor/Critic/Synthesizer/Advisor as agents | Specialist graph nodes, ≤ 1 LLM call per turn; Advisor ranks deterministically | Free-tier quota and latency; predictable tasks | [0010](adr/0010-specialist-agents.md) |
 | Configurable Ollama / OpenAI / Anthropic | A router over free providers (Groq, Gemini, Cerebras, OpenRouter, Ollama) plus optional Anthropic and an offline mock | Free-tier quotas are small, so one provider means downtime | [0004](adr/0004-llm-router.md) |
 
 ## Cross-cutting rules (enforced in code review)
@@ -61,6 +63,6 @@ Background       python -m src.pipeline.runner (cron) · reindex (reconciler)  [
 
 ## Documents
 
-- Phases: [phase 1 — ingestion](phases/phase-1-ingestion.md) · [phase 2 — agentic loop](phases/phase-2-agentic-loop.md) · [phase 3 — personalization](phases/phase-3-personalization-memory.md) · [phase 4 — graph retrieval](phases/phase-4-graph-retrieval.md)
-- ADRs: [0001](adr/0001-html-first-ingestion.md) · [0002](adr/0002-postgres-source-of-truth.md) · [0003](adr/0003-citation-graph-in-postgres.md) · [0004](adr/0004-llm-router.md) · [0005](adr/0005-hybrid-retrieval-rrf.md) · [0006](adr/0006-single-instance-in-process-state.md) · [0007](adr/0007-conversation-state-in-postgres.md) · [0008](adr/0008-learner-model-and-memory-pipeline.md) · [0009](adr/0009-graph-enhanced-retrieval.md)
+- Phases: [phase 1 — ingestion](phases/phase-1-ingestion.md) · [phase 2 — agentic loop](phases/phase-2-agentic-loop.md) · [phase 3 — personalization](phases/phase-3-personalization-memory.md) · [phase 4 — graph retrieval](phases/phase-4-graph-retrieval.md) · [phase 5 — agents & pedagogy](phases/phase-5-agents-pedagogy.md)
+- ADRs: [0001](adr/0001-html-first-ingestion.md) · [0002](adr/0002-postgres-source-of-truth.md) · [0003](adr/0003-citation-graph-in-postgres.md) · [0004](adr/0004-llm-router.md) · [0005](adr/0005-hybrid-retrieval-rrf.md) · [0006](adr/0006-single-instance-in-process-state.md) · [0007](adr/0007-conversation-state-in-postgres.md) · [0008](adr/0008-learner-model-and-memory-pipeline.md) · [0009](adr/0009-graph-enhanced-retrieval.md) · [0010](adr/0010-specialist-agents.md)
 - [Interview questions](interview_questions.md)

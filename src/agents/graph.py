@@ -1,51 +1,57 @@
-"""The chat workflow: classify -> retrieve -> generate (LangGraph).
+"""The chat workflow (LangGraph): route -> retrieve -> one specialist (ADR 0010).
 
-    START -> classify --(smalltalk)--------------------> generate -> END
-                      \\--(anything else)-> retrieve -/
+    START -> route --(plan: none)-----------------------------> specialist -> END
+                  \\--(plan: vector|reading|equation)-> retrieve -/
+
+    route       intent (rules, optional LLM) + tutor session commands -> agent, action, plan
+    retrieve    executes the plan: hybrid search (+ graph, ADR 0009), a paper section in reading
+                order, or an equation with its section
+    specialist  tutor | critic | synthesizer | advisor | general (specialists.py)
 
 Streaming: nodes push events through LangGraph's custom stream writer ({"type": "sources" |
-"token" | "provider"}). Under `astream(stream_mode="custom")` they reach the SSE endpoint; under
-`ainvoke` the writer is a no-op, so the same graph serves both /chat and /chat/stream.
+"token" | "provider"}); under `ainvoke` the writer is a no-op, so the same graph serves /chat and
+/chat/stream.
 
 Failure policy (never block, never invent):
   retrieval fails        -> fixed "search unavailable" answer, no LLM call  (degraded)
   nothing retrieved      -> fixed "not in the indexed papers" answer, no LLM call (degraded)
-                            except smalltalk/chat, which needs no sources
   every LLM unavailable  -> LLMUnavailableError propagates; the API maps it to 503 + Retry-After
 """
 
 import asyncio
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 import structlog
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
 from src.agents import intent as intent_mod
+from src.agents import specialists
+from src.agents import tutor as tutor_mod
 from src.agents.graph_retrieval import expand, mastery_level, rerank
-from src.agents.grounding import resolve_citations
-from src.agents.prompts import PROMPT_VERSION, build_messages
-from src.agents.state import AgentState, Source
+from src.agents.sources import retrieval_query, select_sources, url_for
+from src.agents.specialists import NO_SOURCES, RETRIEVAL_UNAVAILABLE  # noqa: F401 (re-export)
+from src.agents.state import AGENTS, AgentState, Source
 from src.core.config import settings
 from src.core.exceptions import RetrievalError
 from src.graph.store import GraphStore
-from src.llm.base import LLMRequest
 from src.llm.router import LLMRouter
+from src.memory import concepts as vocab
+from src.storage.paper_content import PaperContent
 from src.storage.vector_db import SearchHit
 
 logger = structlog.get_logger(__name__)
 
-RETRIEVAL_UNAVAILABLE = (
-    "Paper search is temporarily unavailable, so I can't give you a grounded answer right now. "
-    "Please try again in a minute."
-)
-NO_SOURCES = (
-    "I couldn't find anything about this in the indexed papers. Try rephrasing with the "
-    "method or paper name, or ask for papers on this topic to be ingested."
-)
+AGENT_FOR_INTENT = {
+    "learn": "tutor",
+    "critique": "critic",
+    "synthesize": "synthesizer",
+    "recommend": "advisor",
+    "chat": "general",
+}
 
 
 class Retriever(Protocol):
@@ -59,19 +65,17 @@ class ChatDeps:
     llm: LLMRouter
     retriever: Retriever
     graph: GraphStore | None = None  # None: vector-only retrieval
-
-
-def _traceable(fn):
-    """LangSmith span when LANGSMITH_TRACING is on; langsmith makes this a no-op otherwise."""
-    try:
-        from langsmith import traceable
-    except ImportError:  # optional dependency
-        return fn
-    return traceable(run_type="chain", name=fn.__name__)(fn)
+    content: PaperContent | None = None  # None: no guided reading / equation walk-through
 
 
 def _timed(name: str, fn: Callable[[AgentState], Awaitable[dict]]):
     """Plan §8: every node logs its duration and outcome; the trace id comes from contextvars."""
+    try:
+        from langsmith import traceable
+
+        fn = traceable(run_type="chain", name=name)(fn)  # no-op unless LANGSMITH_TRACING
+    except ImportError:  # optional dependency
+        pass
 
     async def node(state: AgentState) -> dict:
         started = time.perf_counter()
@@ -88,164 +92,299 @@ def _timed(name: str, fn: Callable[[AgentState], Awaitable[dict]]):
     return node
 
 
-def retrieval_query(query: str, history: list[dict]) -> str:
-    """Short follow-ups ("and its limitations?") are searched together with the previous user
-    message. An LLM rewrite would be better but costs a call per turn on a free quota."""
-    if len(query.split()) > settings.FOLLOWUP_MAX_WORDS:
-        return query
-    previous = next((m["content"] for m in reversed(history) if m["role"] == "user"), None)
-    return f"{previous}\n{query}" if previous else query
+# ================================================================== routing
 
 
-def _url(hit: SearchHit) -> str:
-    anchor = hit.metadata.get("anchor")
-    if anchor and hit.metadata.get("parse_method") == "html":
-        return f"https://arxiv.org/html/{hit.paper_id}#{anchor}"
-    return f"https://arxiv.org/abs/{hit.paper_id}"
+def _vector(query: str, expand_as: str | None = None, **extra) -> dict:
+    return {"kind": "vector", "query": query, "expand_as": expand_as, **extra}
 
 
-def select_sources(hits: list[SearchHit]) -> list[Source]:
-    """Keep ranking order, cap chunks per paper so one long paper cannot fill the context."""
-    per_paper: dict[str, int] = {}
-    sources: list[Source] = []
-    for hit in hits:
-        if per_paper.get(hit.paper_id, 0) >= settings.RETRIEVAL_MAX_PER_PAPER:
-            continue
-        per_paper[hit.paper_id] = per_paper.get(hit.paper_id, 0) + 1
-        sources.append(
-            Source(
-                n=len(sources) + 1,
-                chunk_id=hit.chunk_id,
-                paper_id=hit.paper_id,
-                title=hit.title,
-                section=hit.section,
-                content=hit.content,
-                score=round(hit.score, 4),
-                url=_url(hit),
-                math_fidelity=hit.metadata.get("math_fidelity", "degraded"),
-                role="retrieved",
+def make_plan(agent: str, action: str | None, args: dict, state: Mapping[str, Any]) -> dict:
+    """What the retrieve node should fetch for this specialist and action."""
+    query = state["query"]
+    history = state.get("history", [])
+    ts = state.get("tutor_state") or {}
+    base = retrieval_query(query, history)
+
+    if agent == "general" and intent_mod.is_smalltalk(query):
+        return {"kind": "none"}
+    if agent == "tutor":
+        if action in ("grade", "hint", "skip"):
+            return {"kind": "none", "state_sources": True}
+        if action == "reexplain":
+            if ts.get("sources"):
+                return {"kind": "none", "state_sources": True}
+            last_user = next(
+                (m["content"] for m in reversed(history) if m["role"] == "user"), query
             )
+            return _vector(ts.get("topic") or last_user, "learn")
+        if action == "review":
+            concepts = state.get("concepts") or []
+            due = state.get("due_reviews") or []
+            concept = next(iter(concepts or due), None) or ts.get("concept")
+            if not concept:
+                return {"kind": "none", "concept": None}
+            return _vector(f"{vocab.label(concept)} {concept.replace('_', ' ')}", concept=concept)
+        if action == "read":
+            return {"kind": "reading", "paper_id": args.get("paper_id"), "index": 0}
+        if action == "read_next":
+            reading = ts.get("reading") or {}
+            return {
+                "kind": "reading",
+                "paper_id": reading.get("paper_id"),
+                "index": reading.get("index", -1) + 1,
+            }
+        if action == "equation":
+            return {
+                "kind": "equation",
+                "paper_id": args.get("paper_id"),
+                "ref": args.get("equation"),
+            }
+        return _vector(base, "learn")
+    if agent == "critic":
+        return _vector(base, "critique")
+    if agent == "synthesizer":
+        return _vector(
+            base,
+            "synthesize",
+            top_k=settings.SYNTH_TOP_K,
+            max_per_paper=settings.SYNTH_MAX_PER_PAPER,
         )
-    return sources
+    if agent == "advisor":
+        concepts = state.get("concepts") or []
+        if not concepts:  # "what should I read next?" has no topic: use the reader's gaps
+            profile = state.get("profile") or {}
+            topics = (state.get("weak_concepts") or [])[:3] + list(profile.get("interests") or [])[
+                :3
+            ]
+            if topics:
+                base = " ".join(vocab.label(t) for t in topics)
+        return _vector(base, None, top_k=settings.ADVISOR_CANDIDATES, max_per_paper=1)
+    return _vector(base)
+
+
+# ================================================================== retrieval
 
 
 async def _graph_sources(
-    deps: "ChatDeps", state: AgentState, query: str, hits: list[SearchHit]
+    deps: ChatDeps, state: AgentState, query: str, hits: list[SearchHit], plan: dict
 ) -> list[Source]:
     """Re-rank + expand with the citation graph. Raises on any failure; the caller falls back."""
     assert deps.graph is not None
     level = mastery_level(state.get("profile"), state.get("mastery"))
     influence = await deps.graph.influence(list(dict.fromkeys(h.paper_id for h in hits)))
-    sources = select_sources(rerank(hits, level, influence))[: settings.RETRIEVAL_TOP_K]
+    top_k = plan.get("top_k") or settings.RETRIEVAL_TOP_K
+    sources = select_sources(rerank(hits, level, influence), plan.get("max_per_paper"))[:top_k]
     extra = await expand(
-        state.get("intent", "chat"), query, sources, level, deps.graph, deps.retriever, _url
+        plan.get("expand_as") or "none", query, sources, level, deps.graph, deps.retriever
     )
     if extra:
         logger.info("Graph expansion", added=len(extra), roles=sorted({s["role"] for s in extra}))
     return sources + extra
 
 
+async def _vector_retrieve(deps: ChatDeps, state: AgentState, plan: dict) -> dict:
+    query = plan["query"]
+    top_k = plan.get("top_k") or settings.RETRIEVAL_TOP_K
+    try:
+        # Over-fetch so the per-paper cap still leaves top_k sources.
+        hits = await deps.retriever.search(query, top_k=top_k * 2)
+    except RetrievalError as e:
+        logger.error("Retrieval unavailable, answering without the LLM", error=e.message)
+        return {"retrieval_query": query, "sources": [], "degraded": "retrieval_unavailable"}
+    sources = select_sources(hits, plan.get("max_per_paper"))[:top_k]  # vector-only baseline
+    graph_status = "off"
+    if deps.graph is not None and settings.GRAPH_ENABLED and hits:
+        try:
+            async with asyncio.timeout(settings.GRAPH_TIMEOUT_SECONDS):
+                sources = await _graph_sources(deps, state, query, hits, plan)
+            graph_status = "ok"
+        except Exception as e:  # plan §4: fall back to vector-only on graph failure
+            graph_status = "failed"
+            logger.warning("Graph retrieval failed; vector-only", error=repr(e))
+    needs_sources = state.get("agent") not in ("general", "advisor")
+    degraded = "no_sources" if not sources and needs_sources else None
+    return {
+        "retrieval_query": query,
+        "sources": sources,
+        "degraded": degraded,
+        "graph_status": graph_status,
+    }
+
+
+def _section_sources(meta: dict, chunks: list[dict]) -> list[Source]:
+    sources = []
+    for n, c in enumerate(chunks, start=1):
+        anchor = c.get("anchor")
+        html = anchor and meta.get("parse_method") == "html"
+        sources.append(
+            Source(
+                n=n,
+                chunk_id=str(c["chunk_id"]),
+                paper_id=meta["arxiv_id"],
+                title=meta["title"],
+                section=c.get("section_title") or "",
+                content=c["content"],
+                score=0.0,
+                url=f"https://arxiv.org/html/{meta['arxiv_id']}#{anchor}"
+                if html
+                else f"https://arxiv.org/abs/{meta['arxiv_id']}",
+                math_fidelity=meta.get("math_fidelity") or "degraded",
+                role="reading",
+                published=meta.get("published"),
+            )
+        )
+    return sources
+
+
+async def _reading_retrieve(deps: ChatDeps, plan: dict) -> dict:
+    paper_id, content = plan.get("paper_id"), deps.content
+    meta = await content.paper_meta(paper_id) if content and paper_id else None
+    if content is None or meta is None:
+        return {"sources": [], "degraded": "not_found", "reading": None}
+    sections = await content.sections(meta["arxiv_id"])
+    index = plan.get("index", 0)
+    if index >= len(sections):
+        return {"sources": [], "degraded": "reading_done", "reading": None}
+    section = sections[index]
+    chunks = await content.section_chunks(
+        meta["arxiv_id"], section["idx"], settings.READING_CHUNKS_PER_SECTION
+    )
+    prerequisites: list[str] = []
+    if index == 0 and deps.graph is not None:
+        try:
+            async with asyncio.timeout(settings.GRAPH_TIMEOUT_SECONDS):
+                chain = await deps.graph.prerequisites(meta["arxiv_id"], 1, 3)
+            prerequisites = [f"{p['title']} ({p['arxiv_id']})" for p in chain]
+        except Exception as e:
+            logger.warning("Prerequisites unavailable for reading", error=repr(e))
+    return {
+        "sources": _section_sources(meta, chunks),
+        "degraded": None if chunks else "no_sources",
+        "reading": {
+            "paper_id": meta["arxiv_id"],
+            "title": meta["title"],
+            "index": index,
+            "total": len(sections),
+            "section": section.get("path") or section.get("title"),
+            "prerequisites": prerequisites,
+        },
+    }
+
+
+async def _equation_retrieve(deps: ChatDeps, plan: dict) -> dict:
+    paper_id, ref, content = plan.get("paper_id"), plan.get("ref"), deps.content
+    if content is None or not paper_id or not ref:
+        return {"sources": [], "degraded": "not_found", "equation": None}
+    meta = await content.paper_meta(paper_id)
+    equation = await content.equation(meta["arxiv_id"], ref) if meta else None
+    if meta is None or equation is None:
+        return {"sources": [], "degraded": "not_found", "equation": None}
+    sections = await content.sections(meta["arxiv_id"])
+    path = equation.get("section_path") or ""
+    section = next(
+        (
+            s
+            for s in sections
+            if path and (s.get("path") == path or path.endswith(s["title"] or ""))
+        ),
+        None,
+    )
+    chunks = (
+        await content.section_chunks(
+            meta["arxiv_id"], section["idx"], settings.READING_CHUNKS_PER_SECTION
+        )
+        if section
+        else []
+    )
+    return {
+        "sources": _section_sources(meta, chunks),
+        "degraded": None,
+        "equation": {
+            "paper_id": meta["arxiv_id"],
+            "title": meta["title"],
+            "number": equation.get("number"),
+            "latex": equation["latex"],
+            "section": path,
+        },
+    }
+
+
+# ================================================================== the graph
+
+
 def build_graph(deps: ChatDeps):
-    async def classify(state: AgentState) -> dict:
-        result = await intent_mod.classify(state["query"], deps.llm)
+    async def route(state: AgentState) -> dict:
+        query = state["query"]
+        result = await intent_mod.classify(query, deps.llm)
+        action, args = tutor_mod.detect(
+            query,
+            state.get("tutor_state"),
+            state.get("action"),
+            state.get("action_args"),
+            result,
+            state.get("concepts") or [],
+        )
+        if action:
+            agent = "tutor"
+        else:
+            agent = AGENT_FOR_INTENT[result.intent]
+            action = "explain" if agent == "tutor" else None
+        plan = make_plan(agent, action, args, {**state, "agent": agent})
         logger.info(
-            "Intent classified",
+            "Routed",
             intent=result.intent,
             confidence=result.confidence,
             method=result.method,
+            agent=agent,
+            action=action,
+            plan=plan["kind"],
         )
-        return {"intent": result.intent, "intent_confidence": result.confidence}
+        update: dict = {
+            "intent": result.intent,
+            "intent_confidence": result.confidence,
+            "agent": agent,
+            "tutor_action": action,
+            "plan": plan,
+        }
+        if plan.get("state_sources"):
+            update["sources"] = (state.get("tutor_state") or {}).get("sources", [])
+        return update
 
-    @_traceable
     async def retrieve(state: AgentState) -> dict:
-        writer = get_stream_writer()
-        query = retrieval_query(state["query"], state.get("history", []))
-        try:
-            # Over-fetch so the per-paper cap still leaves RETRIEVAL_TOP_K sources.
-            hits = await deps.retriever.search(query, top_k=settings.RETRIEVAL_TOP_K * 2)
-        except RetrievalError as e:
-            logger.error("Retrieval unavailable, answering without the LLM", error=e.message)
-            return {"retrieval_query": query, "sources": [], "degraded": "retrieval_unavailable"}
-        sources = select_sources(hits)[: settings.RETRIEVAL_TOP_K]  # the vector-only baseline
-        graph_status = "off"
-        if deps.graph is not None and settings.GRAPH_ENABLED and hits:
-            try:
-                async with asyncio.timeout(settings.GRAPH_TIMEOUT_SECONDS):
-                    sources = await _graph_sources(deps, state, query, hits)
-                graph_status = "ok"
-            except Exception as e:  # plan §4: fall back to vector-only on graph failure
-                graph_status = "failed"
-                logger.warning("Graph retrieval failed; vector-only", error=repr(e))
-        writer({"type": "sources", "sources": sources})
-        degraded = "no_sources" if not sources and state.get("intent") != "chat" else None
-        return {
-            "retrieval_query": query,
-            "sources": sources,
-            "degraded": degraded,
-            "graph_status": graph_status,
-        }
+        plan = state["plan"]
+        if plan["kind"] == "reading":
+            update = await _reading_retrieve(deps, plan)
+        elif plan["kind"] == "equation":
+            update = await _equation_retrieve(deps, plan)
+        else:
+            update = await _vector_retrieve(deps, state, plan)
+        get_stream_writer()({"type": "sources", "sources": update.get("sources", [])})
+        return update
 
-    @_traceable
-    async def generate(state: AgentState) -> dict:
-        writer = get_stream_writer()
-        degraded = state.get("degraded")
-        if degraded:
-            text = RETRIEVAL_UNAVAILABLE if degraded == "retrieval_unavailable" else NO_SOURCES
-            writer({"type": "token", "text": text})
-            return {"response": text, "citations": [], "ungrounded": [], "provider": "none"}
+    def after_route(state: AgentState) -> str:
+        return state["agent"] if state["plan"]["kind"] == "none" else "retrieve"
 
-        sources = state.get("sources", [])
-        history = state.get("history", [])[-settings.CHAT_HISTORY_MESSAGES :]
-        request = LLMRequest(
-            messages=build_messages(
-                state["query"],
-                state["intent"],
-                sources,
-                history,
-                state.get("profile"),
-                state.get("mastery"),
-            ),
-            task="tutor" if state["intent"] == "learn" else "default",
-            max_tokens=settings.LLM_MAX_TOKENS,
-            temperature=settings.LLM_TEMPERATURE,
-        )
-        parts: list[str] = []
-        provider = model = ""
-        async for event in deps.llm.stream(request):
-            if event.kind == "start":
-                provider, model = event.provider, event.model
-                writer({"type": "provider", "provider": provider, "model": model})
-            elif event.kind == "token":
-                parts.append(event.text)
-                writer({"type": "token", "text": event.text})
-        text = "".join(parts)
-        citations, ungrounded = resolve_citations(text, sources)
-        if ungrounded:
-            logger.warning("Answer cites sources that were not retrieved", numbers=ungrounded)
-        logger.info(
-            "Answer generated",
-            provider=provider,
-            prompt_version=PROMPT_VERSION,
-            sources=len(sources),
-            citations=len(citations),
-        )
-        return {
-            "response": text,
-            "citations": citations,
-            "ungrounded": ungrounded,
-            "provider": provider,
-            "model": model,
-        }
+    def after_retrieve(state: AgentState) -> str:
+        return state["agent"]
 
-    def after_classify(state: AgentState) -> str:
-        return "generate" if intent_mod.is_smalltalk(state["query"]) else "retrieve"
-
+    nodes = {
+        "tutor": specialists.make_tutor(deps),
+        "critic": specialists.make_critic(deps),
+        "synthesizer": specialists.make_synthesizer(deps),
+        "advisor": specialists.make_advisor(deps),
+        "general": specialists.make_general(deps),
+    }
     graph = StateGraph(AgentState)
-    graph.add_node("classify", _timed("classify", classify))
+    graph.add_node("route", _timed("route", route))
     graph.add_node("retrieve", _timed("retrieve", retrieve))
-    graph.add_node("generate", _timed("generate", generate))
-    graph.add_edge(START, "classify")
-    graph.add_conditional_edges("classify", after_classify, ["retrieve", "generate"])
-    graph.add_edge("retrieve", "generate")
-    graph.add_edge("generate", END)
+    for name in AGENTS:
+        graph.add_node(name, _timed(name, nodes[name]))
+        graph.add_edge(name, END)
+    graph.add_edge(START, "route")
+    graph.add_conditional_edges("route", after_route, ["retrieve", *AGENTS])
+    graph.add_conditional_edges("retrieve", after_retrieve, list(AGENTS))
     return graph.compile()
+
+
+__all__ = ["ChatDeps", "Retriever", "build_graph", "select_sources", "url_for", "make_plan"]

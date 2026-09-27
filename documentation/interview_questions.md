@@ -8,6 +8,7 @@ Each phase document ends with the questions it prepares you for, each with the a
 | Hybrid retrieval, RRF, LangGraph, SSE streaming, grounding, conversation state | [Phase 2](phases/phase-2-agentic-loop.md#4-interview-questions-with-the-answer-you-should-be-able-to-give) |
 | Async memory, learner model (EMA/decay/SM-2), idempotency, optimistic concurrency, JWT, GDPR | [Phase 3](phases/phase-3-personalization-memory.md#6-interview-questions-with-the-answer-you-should-be-able-to-give) |
 | Graph + vector fusion, PageRank, recursive CTEs, citation function, re-ranking | [Phase 4](phases/phase-4-graph-retrieval.md#6-interview-questions-with-the-answer-you-should-be-able-to-give) |
+| Specialist agents, tutor state machine, streaming + structured output, prompt A/B, output checks | [Phase 5](phases/phase-5-agents-pedagogy.md#7-interview-questions-with-the-answer-you-should-be-able-to-give) |
 | LLM routing, failover, rate limiting, circuit breakers | [ADR 0004](adr/0004-llm-router.md) (Decision and Alternatives sections) |
 
 ## Cross-cutting

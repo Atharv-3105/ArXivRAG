@@ -1,73 +1,80 @@
-"""Prompt assembly for the generate node.
+"""Prompt templates: versioned Jinja2 files, A/B variants, and the shared source/reader blocks.
 
-Phase 2 keeps one grounded prompt with a per-intent instruction. Versioned Jinja templates, the
-Socratic tutor and A/B variants arrive in Phase 5; PROMPT_VERSION is logged with every answer so
-quality can be compared across versions from day one.
+Templates live in src/agents/templates as `<name>.v<N>.j2` (e.g. tutor_explain.v2.j2). Every
+answer records `<name>@v<N>` (messages.prompt_version), so a change in answer quality can be traced
+to the template that produced it and variants can be compared (Phase 6 eval).
+
+A/B: PROMPT_VARIANTS lists the versions in rotation per template. A user always gets the same
+variant (sha256 of user id + template name), so the experience is consistent and the comparison
+is between users, not between one user's turns.
+
+Validation: StrictUndefined makes a missing variable an error instead of an empty string, and
+`validate_templates()` runs at startup, so a broken template or a misconfigured variant stops the
+app from starting rather than failing on some user's turn.
 """
 
-from src.agents.state import Intent, Source
+import hashlib
+import re
+from pathlib import Path
+
+from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateNotFound
+
+from src.agents.state import Source
 from src.core.config import settings
 from src.llm.base import ChatMessage
 
-PROMPT_VERSION = "chat-v3"  # v2: reader profile block (Phase 3); v3: graph source roles (Phase 4)
+TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
+_FILE = re.compile(r"^(?P<name>[a-z_]+)\.(?P<version>v\d+)\.j2$")
 
-_BASE = """You are ArXivMind, a research assistant for AI/ML papers.
-
-Rules:
-- Answer ONLY from the numbered sources below. Cite every claim with its source number, e.g. [2].
-- If the sources do not contain the answer, say so plainly. Never invent papers, results or numbers.
-- Keep LaTeX as LaTeX ($...$ inline, $$...$$ display).
-- Sources marked (math: degraded) were extracted from a PDF: their formulas may be garbled, so do
-  not quote those formulas as exact.
-- A source marked (prerequisite) is a paper the main results build on: use it to explain
-  foundations. A source marked (what another paper says) is one paper's statement about another:
-  attribute it ("X argues that ..."), do not present it as established fact.
-- Be concise. Use short paragraphs or bullet points."""
-
-_INTENT: dict[Intent, str] = {
-    "learn": (
-        "The user wants to understand a concept. Build intuition first, then the precise idea, "
-        "then (if relevant) the formula with each symbol explained."
-    ),
-    "critique": (
-        "The user wants a critical assessment. Cover assumptions, baselines, statistical "
-        "validity and reproducibility. Ground every criticism in the cited text; label anything "
-        "the sources do not settle as an open question rather than a flaw."
-    ),
-    "synthesize": (
-        "The user wants several works compared. Say where the sources agree, where they "
-        "contradict each other (cite both sides), and what remains open. A compact table is "
-        "welcome when it helps. Do not treat different setups as directly comparable."
-    ),
-    "recommend": (
-        "The user wants to know what to read. Recommend papers from the sources only, each "
-        "with one line on why it is the right next step."
-    ),
-    "chat": "Answer helpfully and briefly.",
-}
+_env = Environment(
+    loader=FileSystemLoader(TEMPLATE_DIR),
+    undefined=StrictUndefined,
+    trim_blocks=True,
+    lstrip_blocks=True,
+    keep_trailing_newline=False,
+    autoescape=False,  # plain-text prompts, not HTML
+)
 
 
-_ROLE_LABEL = {
-    "prerequisite": " (prerequisite)",
-    "related": " (related via citations)",
-    "citation_context": " (what another paper says)",
-}
+def available() -> dict[str, list[str]]:
+    """template name -> versions on disk, oldest first."""
+    found: dict[str, list[str]] = {}
+    for path in TEMPLATE_DIR.glob("*.j2"):
+        m = _FILE.match(path.name)
+        if m:
+            found.setdefault(m["name"], []).append(m["version"])
+    return {k: sorted(v, key=lambda s: int(s[1:])) for k, v in found.items()}
 
 
-def format_sources(sources: list[Source]) -> str:
-    """One block per source. The mock LLM parses lines that start with "[n]"."""
-    if not sources:
-        return "(no sources were retrieved)"
-    blocks = []
-    for s in sources:
-        fidelity = " (math: degraded)" if s["math_fidelity"] == "degraded" else ""
-        fidelity += _ROLE_LABEL.get(s.get("role", "retrieved"), "")
-        body = " ".join(s["content"].split())
-        blocks.append(
-            f"[{s['n']}] {body}\n    — {s['title']} ({s['paper_id']}), {s['section']}{fidelity}"
-        )
-    return "\n\n".join(blocks)
+def choose_version(name: str, user_id: int | None) -> str:
+    variants = settings.PROMPT_VARIANTS.get(name) or [available()[name][-1]]
+    if not settings.PROMPT_AB_TEST or user_id is None or len(variants) == 1:
+        return variants[0]
+    digest = hashlib.sha256(f"{user_id}:{name}".encode()).digest()
+    return variants[int.from_bytes(digest[:4], "big") % len(variants)]
 
+
+def render(name: str, user_id: int | None = None, **variables) -> tuple[str, str]:
+    """(prompt text, "name@version")."""
+    version = choose_version(name, user_id)
+    text = _env.get_template(f"{name}.{version}.j2").render(**variables)
+    return re.sub(r"\n{3,}", "\n\n", text).strip(), f"{name}@{version}"
+
+
+def validate_templates() -> dict[str, list[str]]:
+    """Compile every template and check every configured variant exists. Raises on problems."""
+    versions = available()
+    for name, vs in versions.items():
+        for v in vs:
+            _env.get_template(f"{name}.{v}.j2")
+    for name, variants in settings.PROMPT_VARIANTS.items():
+        for v in variants:
+            if v not in versions.get(name, []):
+                raise TemplateNotFound(f"PROMPT_VARIANTS names {name}.{v}.j2, which does not exist")
+    return versions
+
+
+# ------------------------------------------------------------------ shared blocks
 
 _LEVEL = {
     "beginner": "a beginner: define every term, prefer analogies, introduce notation gently",
@@ -79,40 +86,56 @@ _MATH = {
     "standard": "Use formulas where they help, and explain each symbol.",
     "rigorous": "Use full mathematical detail and precise statements.",
 }
+_ROLE_LABEL = {
+    "prerequisite": " (prerequisite)",
+    "related": " (related via citations)",
+    "citation_context": " (what another paper says)",
+}
 
 
-def reader_block(profile: dict, mastery: dict[str, float]) -> str:
+def reader_lines(profile: dict | None, mastery: dict[str, float] | None) -> list[str]:
     """How to pitch the answer. Empty when we know nothing about the reader."""
     if not profile:
-        return ""
-    level = _LEVEL.get(profile.get("expertise_level", ""), _LEVEL["intermediate"])
-    lines = [f"The reader is {level}.", _MATH.get(profile.get("math_depth", ""), _MATH["standard"])]
+        return []
+    level = _LEVEL.get(profile.get("expertise_level") or "", _LEVEL["intermediate"])
+    lines = [
+        f"The reader is {level}.",
+        _MATH.get(profile.get("math_depth") or "", _MATH["standard"]),
+    ]
     if profile.get("goals"):
         lines.append("Their goals: " + "; ".join(profile["goals"][:3]) + ".")
+    mastery = mastery or {}
     strong = [c.replace("_", " ") for c, m in mastery.items() if m >= settings.MASTERY_STRONG_ABOVE]
     weak = [c.replace("_", " ") for c, m in mastery.items() if m < settings.MASTERY_WEAK_BELOW]
     if strong:
         lines.append("They already know: " + ", ".join(strong) + " (do not re-explain).")
     if weak:
         lines.append("Still shaky on: " + ", ".join(weak) + " (explain these carefully).")
-    return "\n\nReader:\n" + "\n".join(f"- {line}" for line in lines)
+    return lines
+
+
+def format_sources(sources: list[Source]) -> str:
+    """One block per source. The mock LLM parses lines that start with "[n]"."""
+    if not sources:
+        return "(no sources were retrieved)"
+    blocks = []
+    for s in sources:
+        tags = " (math: degraded)" if s["math_fidelity"] == "degraded" else ""
+        tags += _ROLE_LABEL.get(s.get("role", "retrieved"), "")
+        year = f", {(s.get('published') or '')[:4]}" if s.get("published") else ""
+        body = " ".join(s["content"].split())
+        blocks.append(
+            f"[{s['n']}] {body}\n    — {s['title']} ({s['paper_id']}{year}), {s['section']}{tags}"
+        )
+    return "\n\n".join(blocks)
 
 
 def build_messages(
-    query: str,
-    intent: Intent,
-    sources: list[Source],
-    history: list[dict],
-    profile: dict | None = None,
-    mastery: dict[str, float] | None = None,
+    system: str, sources: list[Source], history: list[dict], user_message: str
 ) -> list[ChatMessage]:
-    system = (
-        f"{_BASE}\n\nTask: {_INTENT[intent]}{reader_block(profile or {}, mastery or {})}"
-        f"\n\nSources:\n{format_sources(sources)}"
-    )
-    messages = [ChatMessage("system", system)]
+    messages = [ChatMessage("system", f"{system}\n\nSources:\n{format_sources(sources)}")]
     for m in history:
         if m["role"] in ("user", "assistant") and m["content"]:
             messages.append(ChatMessage(m["role"], m["content"]))
-    messages.append(ChatMessage("user", query))
+    messages.append(ChatMessage("user", user_message))
     return messages

@@ -25,8 +25,15 @@ class ConversationStore(Protocol):
     async def history(self, user_id: int, conversation_id: str, limit: int) -> list[dict]: ...
 
     async def append(
-        self, user_id: int, conversation_id: str, messages: list[dict], title: str | None = None
+        self,
+        user_id: int,
+        conversation_id: str,
+        messages: list[dict],
+        title: str | None = None,
+        state: dict | None = None,
     ) -> None: ...
+
+    async def get_state(self, user_id: int, conversation_id: str) -> dict | None: ...
 
     async def list_conversations(self, user_id: int, limit: int) -> list[dict]: ...
 
@@ -67,8 +74,25 @@ class PgConversationStore:
             ).all()
         return [{"role": r.role, "content": r.content} for r in reversed(rows)]
 
-    async def append(self, user_id, conversation_id, messages, title=None) -> None:
-        """Creates the conversation on first use; one transaction for the whole turn."""
+    async def get_state(self, user_id, conversation_id) -> dict | None:
+        """The agents' per-conversation state (tutor session). None for a new conversation."""
+        async with get_async_session() as session:
+            row = (
+                await session.execute(
+                    select(Conversation.user_id, Conversation.state).where(
+                        Conversation.id == conversation_id
+                    )
+                )
+            ).one_or_none()
+        if row is None:
+            return None
+        if row.user_id != user_id:
+            raise NotFoundError(NOT_FOUND, code="CONVERSATION_NOT_FOUND")
+        return row.state
+
+    async def append(self, user_id, conversation_id, messages, title=None, state=None) -> None:
+        """Creates the conversation on first use; messages and the agent state of this turn are
+        written in one transaction, so the state always matches the last saved message."""
         async with get_async_session() as session:
             await session.execute(
                 insert(Conversation)
@@ -86,7 +110,7 @@ class PgConversationStore:
             await session.execute(
                 update(Conversation)
                 .where(Conversation.id == conversation_id)
-                .values(updated_at=datetime.now(UTC))
+                .values(updated_at=datetime.now(UTC), state=state)
             )
             await session.commit()
 
@@ -149,6 +173,9 @@ def _message(r: Message) -> dict:
         "intent": r.intent,
         "citations": r.citations,
         "provider": r.provider,
+        "agent": r.agent,
+        "prompt_version": r.prompt_version,
+        "checks": r.checks,
         "at": r.created_at.isoformat(),
     }
 
@@ -157,6 +184,7 @@ class InMemoryConversationStore:
     def __init__(self) -> None:
         self.data: dict[str, list[dict]] = {}
         self.owners: dict[str, int] = {}
+        self.states: dict[str, dict | None] = {}
 
     def _check(self, user_id: int, conversation_id: str) -> bool:
         owner = self.owners.get(conversation_id)
@@ -170,9 +198,14 @@ class InMemoryConversationStore:
         rows = self.data.get(conversation_id, [])[-limit:]
         return [{"role": m["role"], "content": m["content"]} for m in rows]
 
-    async def append(self, user_id, conversation_id, messages, title=None):
+    async def get_state(self, user_id, conversation_id):
+        self._check(user_id, conversation_id)
+        return self.states.get(conversation_id)
+
+    async def append(self, user_id, conversation_id, messages, title=None, state=None):
         self._check(user_id, conversation_id)
         self.owners[conversation_id] = user_id
+        self.states[conversation_id] = state
         now = datetime.now(UTC)
         self.data.setdefault(conversation_id, []).extend({**m, "at": now} for m in messages)
 

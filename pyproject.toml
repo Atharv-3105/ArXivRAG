@@ -20,6 +20,7 @@ dependencies = [
     "langgraph",
     "langsmith",  # optional tracing; inert unless LANGSMITH_TRACING=true
     "pyjwt",
+    "jinja2",
     "bcrypt",
 ]
 

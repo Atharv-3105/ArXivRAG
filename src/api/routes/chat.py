@@ -6,11 +6,12 @@ free-tier host. POST, because a question does not belong in a URL (logs, history
 
 Stream protocol (each event is `event: <name>` + `data: <json>`):
   meta      {conversation_id, trace_id, concepts}
-  intent    {intent, confidence}
+  intent    {intent, confidence, agent, action}
   sources   {sources: [...]}                  the retrieved context, before any token
   provider  {provider, model}
   token     {text}                            repeated
-  done      {answer, citations, ungrounded, degraded, provider, model, timings}
+  done      {answer, citations, ungrounded, degraded, provider, model, agent, prompt_version,
+             checks, verdict, tutor, timings}
   error     {code, message, retry_after?}     terminal; replaces done
 
 Per turn (Phase 3): auth -> rate/quota limits -> history (owner-checked) -> profile + mastery of
@@ -29,6 +30,7 @@ from fastapi import APIRouter, Depends, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from src.agents import tutor as tutor_mod
 from src.agents.state import Citation, Source
 from src.api.deps import current_user, services
 from src.api.errors import retry_after_of
@@ -46,15 +48,25 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(tags=["Chat"])
 
 
+Action = Literal["answer", "hint", "dont_understand", "skip", "review", "read", "next", "equation"]
+
+
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=settings.MAX_MESSAGE_CHARS)
     conversation_id: UUID | None = None
+    # Explicit tutor actions for UI buttons ("Hint", "I don't understand", "Next section", ...).
+    # Free text works too; an explicit action just removes the guessing.
+    action: Action | None = None
+    paper_id: str | None = Field(default=None, max_length=40, description="for read / equation")
+    equation: str | None = Field(default=None, max_length=10, description='e.g. "3"')
 
 
 class ChatResponse(BaseModel):
     conversation_id: UUID
     answer: str
     intent: str
+    agent: str
+    action: str | None
     concepts: list[str]
     citations: list[Citation]
     sources: list[Source]
@@ -63,6 +75,10 @@ class ChatResponse(BaseModel):
     graph_status: str
     provider: str
     model: str
+    prompt_version: str | None
+    checks: dict[str, bool]
+    verdict: str | None
+    tutor: dict | None
     trace_id: str | None
 
 
@@ -97,8 +113,17 @@ async def _prepare(svc: Services, user: UserRecord, body: ChatRequest) -> Turn:
         logger.error("Could not load history", conversation_id=conversation_id, error=str(e))
         history = []
 
+    try:
+        tutor_state = await svc.conversations.get_state(user.id, conversation_id)
+    except NotFoundError:
+        raise
+    except Exception as e:
+        logger.error("Could not load tutor state", conversation_id=conversation_id, error=str(e))
+        tutor_state = None
+
     concepts = vocab.extract_concepts(body.message)
-    profile, mastery = await _reader_context(svc, user.id, concepts)
+    reader = await _reader_context(svc, user.id, concepts)
+    args = {k: v for k, v in (("paper_id", body.paper_id), ("equation", body.equation)) if v}
     return Turn(
         user=user,
         conversation_id=conversation_id,
@@ -106,35 +131,52 @@ async def _prepare(svc: Services, user: UserRecord, body: ChatRequest) -> Turn:
         concepts=concepts,
         graph_input={
             "query": body.message,
+            "user_id": user.id,
             "history": history,
-            "profile": profile,
-            "mastery": mastery,
             "concepts": concepts,
+            "tutor_state": tutor_state,
+            "action": body.action,
+            "action_args": args,
             "timings": {},
+            **reader,
         },
     )
 
 
-async def _reader_context(
-    svc: Services, user_id: int, concepts: list[str]
-) -> tuple[dict, dict[str, float]]:
-    """Profile + effective mastery of this query's concepts. Best effort: defaults on failure.
-    (Plan: Redis hot cache. Here: two primary-key reads on Postgres, ~ms - ADR 0006.)"""
+async def _reader_context(svc: Services, user_id: int, concepts: list[str]) -> dict:
+    """Profile, effective mastery (this query's concepts), weak concepts and due reviews.
+    Best effort: defaults on failure. (Plan: Redis hot cache. Here: three indexed reads on
+    Postgres - ADR 0006.)"""
     try:
         state = await svc.profiles.get_profile(user_id)
-        rows = await svc.profiles.get_mastery(user_id, concepts) if concepts else []
+        rows = await svc.profiles.get_mastery(user_id)
+        now = datetime.now(UTC)
+        due = await svc.profiles.due_reviews(user_id, now, 5)
     except Exception as e:
         logger.error("Could not load profile; using defaults", user_id=user_id, error=str(e))
-        return {}, {}
-    now = datetime.now(UTC)
+        return {"profile": {}, "mastery": {}, "weak_concepts": [], "due_reviews": []}
     prior = prior_for(state.profile)
     half_life = settings.MEMORY_DECAY_HALF_LIFE_DAYS
-    mastery = {
-        s.concept: round(effective_mastery(s, prior, now, half_life), 3)
-        for s in rows[: settings.PROFILE_CONCEPTS_IN_PROMPT]
-    }
+    effective = {s.concept: round(effective_mastery(s, prior, now, half_life), 3) for s in rows}
+    mastery = {c: effective[c] for c in concepts if c in effective}
+    mastery = dict(list(mastery.items())[: settings.PROFILE_CONCEPTS_IN_PROMPT])
+    weak = sorted(
+        (c for c, m in effective.items() if m < settings.MASTERY_WEAK_BELOW),
+        key=lambda c: effective[c],
+    )
+    inferred = sorted(
+        (state.profile.get("inferred_interests") or {}).items(), key=lambda kv: -kv[1]
+    )
+    interests = list(
+        dict.fromkeys([*(state.profile.get("interests") or []), *(c for c, _ in inferred[:5])])
+    )
     profile = {k: state.profile.get(k) for k in ("expertise_level", "math_depth", "goals")}
-    return profile, mastery
+    return {
+        "profile": {**profile, "interests": interests},
+        "mastery": mastery,
+        "weak_concepts": weak,
+        "due_reviews": [d.concept for d in due],
+    }
 
 
 async def _finish(svc: Services, turn: Turn, state: dict) -> None:
@@ -149,15 +191,26 @@ async def _finish(svc: Services, turn: Turn, state: dict) -> None:
             "citations": state.get("citations", []),
             "provider": state.get("provider"),
             "trace_id": trace_id,
+            "agent": state.get("agent"),
+            "prompt_version": state.get("prompt_version"),
+            "checks": state.get("checks") or None,
         },
     ]
     try:
         await svc.conversations.append(
-            turn.user.id, turn.conversation_id, messages, title=turn.query[:80]
+            turn.user.id,
+            turn.conversation_id,
+            messages,
+            title=turn.query[:80],
+            state=state.get("tutor_state"),
         )
     except Exception as e:
         logger.error("Could not save turn", conversation_id=turn.conversation_id, error=str(e))
-    if turn.concepts and not state.get("degraded") and svc.memory is not None:
+    if svc.memory is None or state.get("degraded"):
+        return
+    # A fresh question is (weak) evidence about its concepts; tutor follow-ups (answers, hints,
+    # "I don't understand") carry their own, stronger signals from the tutor state machine.
+    if turn.concepts and state.get("tutor_action") in (None, "explain"):
         svc.memory.submit(
             MemoryEvent(
                 user_id=turn.user.id,
@@ -165,6 +218,8 @@ async def _finish(svc: Services, turn: Turn, state: dict) -> None:
                 payload={"intent": state.get("intent", "chat"), "concepts": turn.concepts},
             )
         )
+    for event in state.get("learning_events") or []:
+        svc.memory.submit(MemoryEvent(user_id=turn.user.id, **event))
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -180,6 +235,8 @@ async def chat(
         conversation_id=UUID(turn.conversation_id),
         answer=state.get("response", ""),
         intent=state.get("intent", "chat"),
+        agent=state.get("agent", "general"),
+        action=state.get("tutor_action"),
         concepts=turn.concepts,
         citations=state.get("citations", []),
         sources=state.get("sources", []),
@@ -188,6 +245,10 @@ async def chat(
         graph_status=state.get("graph_status", "off"),
         provider=state.get("provider", ""),
         model=state.get("model", ""),
+        prompt_version=state.get("prompt_version"),
+        checks=state.get("checks") or {},
+        verdict=state.get("verdict"),
+        tutor=tutor_mod.public_view(state.get("tutor_state")),
         trace_id=current_trace_id(),
     )
 
@@ -229,10 +290,15 @@ async def chat_stream(
                     timings = {**final.get("timings", {}), **update.get("timings", {})}
                     final.update(update)
                     final["timings"] = timings
-                    if node == "classify":
+                    if node == "route":
                         yield sse(
                             "intent",
-                            {"intent": update["intent"], "confidence": update["intent_confidence"]},
+                            {
+                                "intent": update["intent"],
+                                "confidence": update["intent_confidence"],
+                                "agent": update["agent"],
+                                "action": update["tutor_action"],
+                            },
                         )
         except ArxivMindError as e:
             logger.error("Stream failed", code=e.code, error=e.message)
@@ -257,6 +323,11 @@ async def chat_stream(
                 "graph_status": final.get("graph_status", "off"),
                 "provider": final.get("provider", ""),
                 "model": final.get("model", ""),
+                "agent": final.get("agent"),
+                "prompt_version": final.get("prompt_version"),
+                "checks": final.get("checks") or {},
+                "verdict": final.get("verdict"),
+                "tutor": tutor_mod.public_view(final.get("tutor_state")),
                 "timings": final.get("timings", {}),
             },
         )

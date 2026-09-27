@@ -163,8 +163,23 @@ class Settings(BaseSettings):
     MEMORY_MAX_RETRIES: int = Field(default=3)
     PROFILE_CONCEPTS_IN_PROMPT: int = Field(default=6, description="Mastery entries shown to LLM")
 
-    # Pedagogy
-    PROMPT_AB_TEST: bool = Field(default=True, description="Split tutor prompt variants by user")
+    # Pedagogy / agents (Phase 5)
+    PROMPT_AB_TEST: bool = Field(default=True, description="Split prompt variants by user")
+    PROMPT_VARIANTS: dict[str, list[str]] = Field(
+        default={"tutor_explain": ["v1", "v2"]},
+        description="Template versions in rotation per prompt; the first is the default",
+    )
+    TUTOR_MAX_HINTS: int = Field(default=2, ge=0, le=5)
+    TUTOR_MAX_STEPS: int = Field(default=4, ge=1, le=10, description="Questions per session")
+    TUTOR_EXPLAIN_MAX_WORDS: int = Field(default=220)
+    TUTOR_STATE_SOURCE_CHARS: int = Field(
+        default=900, description="Per-source text kept in the tutor state for grading"
+    )
+    READING_CHUNKS_PER_SECTION: int = Field(default=4, ge=1, le=10)
+    SYNTH_TOP_K: int = Field(default=8, ge=2, le=20)
+    SYNTH_MAX_PER_PAPER: int = Field(default=2, ge=1)
+    ADVISOR_CANDIDATES: int = Field(default=10, ge=3, le=30)
+    ADVISOR_MAX_RECOMMENDATIONS: int = Field(default=5, ge=1, le=10)
 
     # Observability
     LANGSMITH_TRACING: bool = Field(default=False, description="Opt-in: sends traces to a cloud")

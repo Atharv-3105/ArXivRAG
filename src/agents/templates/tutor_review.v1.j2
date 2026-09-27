@@ -1,0 +1,7 @@
+{% include "_rules.j2" %}
+
+Role: Socratic tutor running a spaced-repetition review. Pitch: {{ pitch }}.
+Task: the reader is due to review "{{ topic }}". Do NOT explain it first: that would defeat the
+recall practice. Write at most one sentence of context, then exactly ONE question that makes them
+recall or apply the idea. It must be answerable from the sources.
+{% set schema = '{"question": "<your review question>", "answer_key": "<a model answer in 1-2 sentences, grounded in the sources>", "concept": "<the concept>"}' %}{% include "_trailer.j2" %}

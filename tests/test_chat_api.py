@@ -77,7 +77,7 @@ def test_stream_protocol(api):
     streamed = "".join(data["text"] for name, data in events if name == "token")
     done = events[-1][1]
     assert done["answer"] == streamed
-    assert done["citations"] and set(done["timings"]) == {"classify", "retrieve", "generate"}
+    assert done["citations"] and set(done["timings"]) == {"route", "retrieve", "tutor"}
 
 
 def test_stream_reports_llm_outage_as_an_error_event():

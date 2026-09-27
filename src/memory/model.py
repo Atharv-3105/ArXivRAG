@@ -41,10 +41,17 @@ SIGNALS: dict[str, tuple[float, float]] = {
     "understood": (0.8, 0.6),
     "confused": (0.1, 0.6),
     "quiz_correct": (1.0, 1.0),
+    "quiz_partial": (0.5, 0.8),
     "quiz_incorrect": (0.0, 1.0),
 }
 # SM-2 recall quality (0-5) for signals that are a genuine recall test; plain questions are not.
-REVIEW_QUALITY = {"quiz_correct": 5, "understood": 4, "confused": 1, "quiz_incorrect": 0}
+REVIEW_QUALITY = {
+    "quiz_correct": 5,
+    "understood": 4,
+    "quiz_partial": 3,
+    "confused": 1,
+    "quiz_incorrect": 0,
+}
 
 # Expertise inference: the mean mastery over concepts with enough evidence.
 MIN_EVIDENCE = 3
@@ -159,8 +166,9 @@ def signals_for(kind: str, payload: dict) -> list[tuple[str, str]]:
     if kind == "feedback" and payload.get("signal") in ("understood", "confused"):
         return [(c, payload["signal"]) for c in payload.get("concepts", [])]
     if kind == "quiz" and payload.get("concept"):
-        signal = "quiz_correct" if payload.get("correct") else "quiz_incorrect"
-        return [(payload["concept"], signal)]
+        result = payload.get("result") or ("correct" if payload.get("correct") else "incorrect")
+        signal = f"quiz_{result}"
+        return [(payload["concept"], signal)] if signal in SIGNALS else []
     return []  # e.g. helpful/not_helpful rate the answer, not the learner
 
 

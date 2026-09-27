@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
+from src.agents.trailer import split_complete
 from src.core.config import Settings
 from src.llm.anthropic_adapter import AnthropicAdapter
 from src.llm.base import ChatMessage, ErrorKind, LLMRequest, ProviderError, Usage, parse_retry_after
@@ -250,11 +251,12 @@ async def test_mock_quotes_and_cites_numbered_sources():
 
 
 async def test_mock_stream_matches_complete():
-    r = LLMRequest([ChatMessage("user", "[1] A fact.")], task="tutor")
+    r = LLMRequest([ChatMessage("user", "[1] A fact.")], task="tutor", tags={"agent": "tutor"})
     m = MockAdapter()
     streamed = "".join([i async for i in m.stream(r) if isinstance(i, str)])
     assert streamed == (await m.complete(r)).text
-    assert streamed.rstrip().endswith("?")  # tutor mode asks a question
+    visible, meta = split_complete(streamed)
+    assert visible.endswith("?") and meta["question"] == visible.splitlines()[-1]
 
 
 # ----------------------------------------------------------------------- registry

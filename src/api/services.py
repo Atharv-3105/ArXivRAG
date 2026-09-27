@@ -20,6 +20,7 @@ from src.llm.router import LLMRouter
 from src.memory.manager import MemoryManager
 from src.memory.store import PgProfileStore, ProfileStore
 from src.storage.conversations import ConversationStore, PgConversationStore
+from src.storage.paper_content import PaperContent, PgPaperContent
 from src.storage.vector_db import VectorStore
 
 logger = structlog.get_logger(__name__)
@@ -33,6 +34,7 @@ class Services:
     users: UserStore
     profiles: ProfileStore
     graph_store: GraphStore | None = None
+    content: PaperContent | None = None
     memory: MemoryManager | None = None
     limiter: SlidingWindowLimiter = field(
         default_factory=lambda: SlidingWindowLimiter(settings.RATE_LIMIT_PER_MINUTE)
@@ -45,7 +47,12 @@ class Services:
     def __post_init__(self) -> None:
         if self.graph is None:
             self.graph = build_graph(
-                ChatDeps(llm=self.llm, retriever=self.retriever, graph=self.graph_store)
+                ChatDeps(
+                    llm=self.llm,
+                    retriever=self.retriever,
+                    graph=self.graph_store,
+                    content=self.content,
+                )
             )
         if self.memory is None:
             self.memory = MemoryManager(self.profiles)
@@ -89,4 +96,5 @@ async def create_services() -> Services:
         users=PgUserStore(),
         profiles=PgProfileStore(),
         graph_store=PgGraphStore(),
+        content=PgPaperContent(),
     )

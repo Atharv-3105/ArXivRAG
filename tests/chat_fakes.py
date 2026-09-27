@@ -80,7 +80,20 @@ def router(adapter=None) -> LLMRouter:
     return LLMRouter([(adapter or RecordingAdapter(), ProviderLimits())])
 
 
-def make_services(hits=None, retrieval_error=None, adapter=None, graph_store=None) -> Services:
+class ScriptedAdapter(RecordingAdapter):
+    """Returns the scripted replies in order (then falls back to the mock)."""
+
+    def __init__(self, *replies: str):
+        super().__init__()
+        self.replies = list(replies)
+
+    def _answer(self, request):
+        return self.replies.pop(0) if self.replies else super()._answer(request)
+
+
+def make_services(
+    hits=None, retrieval_error=None, adapter=None, graph_store=None, content=None
+) -> Services:
     return Services(
         llm=router(adapter),
         retriever=FakeRetriever(hits, retrieval_error),
@@ -88,6 +101,7 @@ def make_services(hits=None, retrieval_error=None, adapter=None, graph_store=Non
         users=InMemoryUserStore(),
         profiles=InMemoryProfileStore(),
         graph_store=graph_store,
+        content=content,
     )
 
 

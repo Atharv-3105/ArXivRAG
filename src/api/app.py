@@ -5,6 +5,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.agents.prompts import validate_templates
 from src.api.errors import install_error_handlers
 from src.api.routes import auth, chat, health, me, papers
 from src.api.services import Services, create_services
@@ -17,6 +18,10 @@ def create_app(services: Services | None = None) -> FastAPI:
     setup_logging()
     logger = structlog.get_logger("arxiv-project")
     logger.info("Initializing application", debug=settings.DEBUG)
+    # A broken prompt template or a PROMPT_VARIANTS entry without a file stops startup here,
+    # instead of failing on some user's turn.
+    templates = validate_templates()
+    logger.info("Prompt templates valid", templates={k: v for k, v in templates.items()})
 
     if settings.LANGSMITH_TRACING:
         # Opt-in: traces leave the machine. LangGraph/langsmith read these env vars.
