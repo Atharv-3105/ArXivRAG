@@ -1,0 +1,78 @@
+# Alert thresholds come from the SLOs in documentation/slo.md. Every alert names its runbook.
+groups:
+  - name: arxivmind-slo
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(arxivmind_http_requests_total{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(arxivmind_http_requests_total[5m])), 1e-9) > 0.02
+        for: 10m
+        labels: {severity: page}
+        annotations:
+          summary: "More than 2% of requests fail with 5xx"
+          runbook: documentation/runbooks/database-down.md
+
+      - alert: SlowFirstToken
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(arxivmind_chat_first_token_seconds_bucket[10m]))) > 2
+        for: 15m
+        labels: {severity: ticket}
+        annotations:
+          summary: "p95 time to first token above the 2 s SLO"
+          runbook: documentation/runbooks/llm-providers-down.md
+
+      - alert: LLMProvidersUnavailable
+        expr: |
+          sum(rate(arxivmind_llm_calls_total{outcome!="success"}[5m]))
+            / clamp_min(sum(rate(arxivmind_llm_calls_total[5m])), 1e-9) > 0.5
+        for: 10m
+        labels: {severity: page}
+        annotations:
+          summary: "Most LLM calls are failing (quota, outage or bad keys)"
+          runbook: documentation/runbooks/llm-providers-down.md
+
+      - alert: AllBreakersOpen
+        expr: min(arxivmind_llm_breaker_open{provider!="mock"}) == 1
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "Every real LLM provider's circuit breaker is open: answers come from the offline mock"
+          runbook: documentation/runbooks/llm-providers-down.md
+
+      - alert: DegradedAnswers
+        expr: |
+          sum(rate(arxivmind_chat_turns_total{outcome="degraded"}[15m]))
+            / clamp_min(sum(rate(arxivmind_chat_turns_total[15m])), 1e-9) > 0.2
+        for: 15m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Over 20% of answers degraded (search down or empty corpus)"
+          runbook: documentation/runbooks/qdrant-down-and-reindex.md
+
+      - alert: GuardrailRejections
+        expr: |
+          sum(rate(arxivmind_guardrail_decisions_total{approved="false"}[1h]))
+            / clamp_min(sum(rate(arxivmind_guardrail_decisions_total[1h])), 1e-9) > 0.15
+        for: 1h
+        labels: {severity: ticket}
+        annotations:
+          summary: "Over 15% of answers flagged by the guardrail (target: 95% grounded)"
+          runbook: documentation/runbooks/guardrail-alerts.md
+
+      - alert: MemoryQueueBacklog
+        expr: arxivmind_memory_queue_depth > 500
+        for: 10m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Profile updates are backing up (the queue drops events when full)"
+          runbook: documentation/runbooks/memory-queue-backlog.md
+
+      - alert: GraphRetrievalFailing
+        expr: |
+          sum(rate(arxivmind_graph_retrieval_total{status="failed"}[15m]))
+            / clamp_min(sum(rate(arxivmind_graph_retrieval_total[15m])), 1e-9) > 0.2
+        for: 15m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Graph retrieval failing; answers fall back to vector-only"
+          runbook: documentation/runbooks/database-down.md

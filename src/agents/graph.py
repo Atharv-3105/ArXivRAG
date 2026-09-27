@@ -1,6 +1,6 @@
 """The chat workflow (LangGraph): route -> retrieve -> one specialist (ADR 0010).
 
-    START -> route --(plan: none)-----------------------------> specialist -> END
+    START -> route --(plan: none)-----------------------------> specialist -> guardrail -> END
                   \\--(plan: vector|reading|equation)-> retrieve -/
 
     route       intent (rules, optional LLM) + tutor session commands -> agent, action, plan
@@ -28,13 +28,14 @@ import structlog
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
+from src.agents import guardrail, specialists
 from src.agents import intent as intent_mod
-from src.agents import specialists
 from src.agents import tutor as tutor_mod
 from src.agents.graph_retrieval import expand, mastery_level, rerank
 from src.agents.sources import retrieval_query, select_sources, url_for
 from src.agents.specialists import NO_SOURCES, RETRIEVAL_UNAVAILABLE  # noqa: F401 (re-export)
 from src.agents.state import AGENTS, AgentState, Source
+from src.core import metrics
 from src.core.config import settings
 from src.core.exceptions import RetrievalError
 from src.graph.store import GraphStore
@@ -310,12 +311,53 @@ async def _equation_retrieve(deps: ChatDeps, plan: dict) -> dict:
     }
 
 
+# ================================================================== input gate
+
+
+def _gated(reason: str, flags: dict) -> dict:
+    metrics.INPUT_GATE.labels(reason).inc()
+    return {
+        "intent": "chat",
+        "intent_confidence": 1.0,
+        "agent": "general",
+        "tutor_action": None,
+        "plan": {"kind": "none"},
+        "degraded": reason,
+        "input_flags": flags,
+    }
+
+
+async def _moderation_gate(deps: ChatDeps, state: AgentState, flags: dict) -> dict | None:
+    """ADR 0011: optional LLM moderation before anything else. None = let the turn through."""
+    if not (settings.GUARDRAIL_ENABLED and settings.GUARDRAIL_MODERATION):
+        return None
+    flags["moderation"] = await guardrail.moderate(state["query"], deps.llm)
+    if not flags["moderation"]["allowed"]:
+        logger.warning("Input refused by moderation", category=flags["moderation"]["category"])
+        return _gated("unsafe", flags)
+    return None
+
+
+def _out_of_domain(state: AgentState) -> bool:
+    if not (settings.GUARDRAIL_ENABLED and settings.GUARDRAIL_DOMAIN_GATE):
+        return False
+    return not guardrail.in_domain(
+        state["query"], state.get("history", []), state.get("tutor_state"), state.get("action")
+    )
+
+
 # ================================================================== the graph
 
 
 def build_graph(deps: ChatDeps):
     async def route(state: AgentState) -> dict:
         query = state["query"]
+        flags: dict = {"prompt_injection": guardrail.prompt_injection(query)}
+        if flags["prompt_injection"]:
+            logger.warning("Possible prompt injection", preview=query[:120])
+        refused = await _moderation_gate(deps, state, flags)
+        if refused is not None:
+            return refused
         result = await intent_mod.classify(query, deps.llm)
         action, args = tutor_mod.detect(
             query,
@@ -325,6 +367,12 @@ def build_graph(deps: ChatDeps):
             result,
             state.get("concepts") or [],
         )
+        # Tutor commands ("quiz me", "next", "hint") are in scope by definition; only free-form
+        # messages go through the domain gate.
+        if action is None and _out_of_domain(state):
+            logger.info("Out-of-domain question refused", preview=query[:80])
+            return _gated("out_of_domain", flags)
+        metrics.INPUT_GATE.labels("pass").inc()
         if action:
             agent = "tutor"
         else:
@@ -346,6 +394,7 @@ def build_graph(deps: ChatDeps):
             "agent": agent,
             "tutor_action": action,
             "plan": plan,
+            "input_flags": flags,
         }
         if plan.get("state_sources"):
             update["sources"] = (state.get("tutor_state") or {}).get("sources", [])
@@ -360,6 +409,30 @@ def build_graph(deps: ChatDeps):
         else:
             update = await _vector_retrieve(deps, state, plan)
         get_stream_writer()({"type": "sources", "sources": update.get("sources", [])})
+        return update
+
+    async def guard(state: AgentState) -> dict:
+        """ADR 0011: check the finished answer; append a visible notice if it is not approved."""
+        if not settings.GUARDRAIL_ENABLED or state.get("provider") in ("none", "advisor"):
+            decision = guardrail.GuardDecision(True, 1.0, metrics={"skipped": True})
+        else:
+            lenient = state.get("agent") == "tutor" and state.get("tutor_action") in (
+                "grade",
+                "hint",
+            )
+            decision = guardrail.check_answer(
+                state.get("response", ""),
+                state.get("sources", []),
+                state.get("ungrounded", []),
+                strict=not lenient,
+            )
+        for issue in decision.issues or ["none"]:
+            metrics.GUARDRAIL.labels(str(decision.approved).lower(), issue).inc()
+        update: dict = {"guardrail": {**decision.to_dict(), "input": state.get("input_flags", {})}}
+        if decision.notice:
+            logger.warning("Guardrail flagged answer", issues=decision.issues)
+            get_stream_writer()({"type": "token", "text": decision.notice})
+            update["response"] = state.get("response", "") + decision.notice
         return update
 
     def after_route(state: AgentState) -> str:
@@ -378,9 +451,11 @@ def build_graph(deps: ChatDeps):
     graph = StateGraph(AgentState)
     graph.add_node("route", _timed("route", route))
     graph.add_node("retrieve", _timed("retrieve", retrieve))
+    graph.add_node("guardrail", _timed("guardrail", guard))
+    graph.add_edge("guardrail", END)
     for name in AGENTS:
         graph.add_node(name, _timed(name, nodes[name]))
-        graph.add_edge(name, END)
+        graph.add_edge(name, "guardrail")
     graph.add_edge(START, "route")
     graph.add_conditional_edges("route", after_route, ["retrieve", *AGENTS])
     graph.add_conditional_edges("retrieve", after_retrieve, list(AGENTS))

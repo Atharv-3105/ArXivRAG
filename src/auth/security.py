@@ -47,16 +47,25 @@ def create_access_token(user_id: int, now: datetime | None = None) -> tuple[str,
 
 def decode_access_token(token: str) -> int:
     """User id from a valid token; AuthError for anything else (expired, forged, malformed)."""
-    try:
-        claims = jwt.decode(
-            token,
-            settings.SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM],  # a list: never trust the token's own "alg"
-            issuer=settings.APP_NAME,
-            options={"require": ["sub", "exp", "iat"]},
-        )
-        return int(claims["sub"])
-    except jwt.ExpiredSignatureError as e:
-        raise AuthError("Token expired", code="TOKEN_EXPIRED") from e
-    except (jwt.InvalidTokenError, ValueError) as e:
-        raise AuthError("Invalid token", code="INVALID_TOKEN") from e
+    # Rotation: new tokens are signed with SECRET_KEY; tokens signed with SECRET_KEY_PREVIOUS keep
+    # working until they expire, so rotating the key does not log everyone out at once.
+    keys = [k for k in (settings.SECRET_KEY, settings.SECRET_KEY_PREVIOUS) if k]
+    for i, key in enumerate(keys):
+        try:
+            claims = jwt.decode(
+                token,
+                key,
+                algorithms=[settings.JWT_ALGORITHM],  # a list: never trust the token's own "alg"
+                issuer=settings.APP_NAME,
+                options={"require": ["sub", "exp", "iat"]},
+            )
+            return int(claims["sub"])
+        except jwt.ExpiredSignatureError as e:
+            raise AuthError("Token expired", code="TOKEN_EXPIRED") from e
+        except jwt.InvalidSignatureError:
+            if i + 1 < len(keys):
+                continue  # maybe signed with the previous key
+            raise AuthError("Invalid token", code="INVALID_TOKEN") from None
+        except (jwt.InvalidTokenError, ValueError) as e:
+            raise AuthError("Invalid token", code="INVALID_TOKEN") from e
+    raise AuthError("Invalid token", code="INVALID_TOKEN")

@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 
+from src.core import metrics
 from src.core.config import settings
 from src.core.exceptions import RateLimitError
 from src.storage.conversations import ConversationStore
@@ -63,6 +64,7 @@ async def enforce_chat_limits(
         return
     wait = limiter.hit(user_id)
     if wait is not None:
+        metrics.RATE_LIMITED.labels("per_minute").inc()
         raise RateLimitError("Too many requests, slow down", retry_after=max(1, int(wait) + 1))
 
     now = now or datetime.now(UTC)
@@ -73,6 +75,7 @@ async def enforce_chat_limits(
         logger.error("Could not check daily quota; allowing", user_id=user_id, error=str(e))
         return
     if used >= settings.FREE_DAILY_MESSAGES:
+        metrics.RATE_LIMITED.labels("daily_quota").inc()
         reset_in = int((start + timedelta(days=1) - now).total_seconds()) + 1
         raise RateLimitError(
             f"Daily limit of {settings.FREE_DAILY_MESSAGES} messages reached; resets at 00:00 UTC",

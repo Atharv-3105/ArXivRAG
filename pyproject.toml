@@ -21,6 +21,7 @@ dependencies = [
     "langsmith",  # optional tracing; inert unless LANGSMITH_TRACING=true
     "pyjwt",
     "jinja2",
+    "prometheus-client",
     "bcrypt",
 ]
 

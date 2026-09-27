@@ -58,7 +58,61 @@ services:
       - hf_cache:/models # embedding model is downloaded once, not on every run
     restart: "no"
 
+  # The web API. `docker compose --profile api up -d`
+  api:
+    profiles: ["api", "observability"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${DB_USER:-arxivmind}:${DB_PASSWORD}@db:5432/${DB_NAME:-arxivmind}
+      QDRANT_URL: http://qdrant:6333
+    # --proxy-headers: behind a proxy/platform, client IPs come from X-Forwarded-For (per-IP limits)
+    command: ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    volumes:
+      - hf_cache:/models
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(urllib.request.urlopen('http://127.0.0.1:8000/health/ready').status != 200)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # Metrics stack. `docker compose --profile observability up -d`, Grafana on localhost:3001
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v3.5.0
+    volumes:
+      - ./ops/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on: [api]
+
+  grafana:
+    profiles: ["observability"]
+    image: grafana/grafana:12.1.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me}
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on: [prometheus]
+
 volumes:
   postgres_data:
   qdrant_storage:
   hf_cache:
+  prometheus_data:

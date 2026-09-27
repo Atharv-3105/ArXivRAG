@@ -67,5 +67,8 @@ class AgentState(TypedDict, total=False):
     checks: dict[str, bool]
     verdict: str | None  # tutor grading: correct | partial | incorrect
     learning_events: list[dict]  # memory events for the chat route to submit
+    # guardrail (Phase 6)
+    input_flags: dict  # {"prompt_injection": bool, "moderation": {...}}
+    guardrail: dict  # {"approved", "confidence", "issues", "metrics"}
     # observability: every node adds its duration (merged, not overwritten)
     timings: Annotated[dict[str, float], operator.or_]

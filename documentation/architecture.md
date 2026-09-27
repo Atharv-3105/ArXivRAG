@@ -8,10 +8,12 @@ The plan in `Docs/arxiv_plan.md` is the target. This file describes **what exist
 Clients          Web UI · CLI                                          (Phase 2+)
                      │ HTTPS, SSE
 API              FastAPI · JWT auth · per-user limits · /chat, /chat/stream (SSE), /me, /feedback
+                 /metrics (Prometheus) · /health/live · /health/ready                    [ADR 0012]
                  trace-id middleware · typed errors → HTTP                   [ADR 0006]
                      │
 Agentic core     LangGraph: route → retrieve (hybrid, RRF, + graph) → specialist   [ADR 0005, 0009, 0010]
                  specialists: tutor (stateful, Socratic) · critic · synthesizer · advisor · general
+                 guardrail: input gate (domain, injection, opt-in moderation) + grounding checks [ADR 0011]
                  (specialists: Phase 5, guardrail: Phase 6)
                  LLM router: N free providers, failover, budgets, breakers   [ADR 0004]
                  MemoryManager: async queue → learner model → profile/mastery [ADR 0008]
@@ -20,7 +22,8 @@ Data             Postgres 16 ── source of truth: papers, chunks, equations,
                                 references, citation graph + contexts,      [ADR 0002, 0003]
                                 influence, runs, DLQ                         [ADR 0009]
                  Qdrant ─────── derived vector index, rebuildable from Postgres
-Background       python -m src.pipeline.runner (cron) · reindex (reconciler)  [ADR 0001]
+Background       scheduled GitHub Actions ingestion · reindex (reconciler)   [ADR 0001, 0013]
+Ops              CI gate (tests + offline eval + secret scan) · GHCR sha images · runbooks [ADR 0013]
 ```
 
 ## Stores and ownership
@@ -51,6 +54,8 @@ Background       python -m src.pipeline.runner (cron) · reindex (reconciler)  [
 | Redis for sessions, rate limits, hot profiles | Stateless JWT; in-process windows; Postgres reads; daily quota in Postgres | One free instance; no extra service or hop | [0006](adr/0006-single-instance-in-process-state.md) |
 | Celery/RQ worker, partitioned audit | In-process asyncio queue + transactional apply; indexed audit | One container; volume too low to partition | [0008](adr/0008-learner-model-and-memory-pipeline.md) |
 | Tutor/Critic/Synthesizer/Advisor as agents | Specialist graph nodes, ≤ 1 LLM call per turn; Advisor ranks deterministically | Free-tier quota and latency; predictable tasks | [0010](adr/0010-specialist-agents.md) |
+| LangSmith for eval and A/B | Own harness: offline CI gate, live suites, A/B from the messages table | No cloud dependency or keys in CI; gates are deterministic | [0012](adr/0012-evaluation-and-observability.md) |
+| Airflow (Phase 2 of orchestration) | Scheduled GitHub Actions workflow | A daily batch needs no scheduler service on a free tier | [0013](adr/0013-deployment-and-operations.md) |
 | Configurable Ollama / OpenAI / Anthropic | A router over free providers (Groq, Gemini, Cerebras, OpenRouter, Ollama) plus optional Anthropic and an offline mock | Free-tier quotas are small, so one provider means downtime | [0004](adr/0004-llm-router.md) |
 
 ## Cross-cutting rules (enforced in code review)
@@ -63,6 +68,7 @@ Background       python -m src.pipeline.runner (cron) · reindex (reconciler)  [
 
 ## Documents
 
-- Phases: [phase 1 — ingestion](phases/phase-1-ingestion.md) · [phase 2 — agentic loop](phases/phase-2-agentic-loop.md) · [phase 3 — personalization](phases/phase-3-personalization-memory.md) · [phase 4 — graph retrieval](phases/phase-4-graph-retrieval.md) · [phase 5 — agents & pedagogy](phases/phase-5-agents-pedagogy.md)
-- ADRs: [0001](adr/0001-html-first-ingestion.md) · [0002](adr/0002-postgres-source-of-truth.md) · [0003](adr/0003-citation-graph-in-postgres.md) · [0004](adr/0004-llm-router.md) · [0005](adr/0005-hybrid-retrieval-rrf.md) · [0006](adr/0006-single-instance-in-process-state.md) · [0007](adr/0007-conversation-state-in-postgres.md) · [0008](adr/0008-learner-model-and-memory-pipeline.md) · [0009](adr/0009-graph-enhanced-retrieval.md) · [0010](adr/0010-specialist-agents.md)
+- Phases: [phase 1 — ingestion](phases/phase-1-ingestion.md) · [phase 2 — agentic loop](phases/phase-2-agentic-loop.md) · [phase 3 — personalization](phases/phase-3-personalization-memory.md) · [phase 4 — graph retrieval](phases/phase-4-graph-retrieval.md) · [phase 5 — agents & pedagogy](phases/phase-5-agents-pedagogy.md) · [phase 6 — eval & ops](phases/phase-6-eval-ops.md)
+- ADRs: [0001](adr/0001-html-first-ingestion.md) · [0002](adr/0002-postgres-source-of-truth.md) · [0003](adr/0003-citation-graph-in-postgres.md) · [0004](adr/0004-llm-router.md) · [0005](adr/0005-hybrid-retrieval-rrf.md) · [0006](adr/0006-single-instance-in-process-state.md) · [0007](adr/0007-conversation-state-in-postgres.md) · [0008](adr/0008-learner-model-and-memory-pipeline.md) · [0009](adr/0009-graph-enhanced-retrieval.md) · [0010](adr/0010-specialist-agents.md) · [0011](adr/0011-guardrail.md) · [0012](adr/0012-evaluation-and-observability.md) · [0013](adr/0013-deployment-and-operations.md)
+- [SLOs](slo.md) · [Deployment](deployment.md) · [Runbooks](runbooks/README.md) · [Evaluation](eval/README.md) · [API](api/README.md)
 - [Interview questions](interview_questions.md)

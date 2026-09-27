@@ -45,7 +45,14 @@ READING_DONE = (
     'That was the last section of the paper. Say "quiz me" to review what you learned, or ask '
     "me to compare it with related work."
 )
+OUT_OF_DOMAIN = (
+    "I'm a research assistant for AI and machine-learning papers, so I can't help with that. "
+    "Ask me about a model, method, paper or concept, and I'll answer from the indexed papers."
+)
+UNSAFE = "I can't help with that request."
 _DEGRADED = {
+    "out_of_domain": OUT_OF_DOMAIN,
+    "unsafe": UNSAFE,
     "retrieval_unavailable": RETRIEVAL_UNAVAILABLE,
     "no_sources": NO_SOURCES,
     "not_found": NOT_FOUND,

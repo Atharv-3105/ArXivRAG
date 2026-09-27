@@ -11,6 +11,7 @@ from src.api.routes import auth, chat, health, me, papers
 from src.api.services import Services, create_services
 from src.core.config import settings
 from src.core.logging import TraceIDMiddleware, setup_logging
+from src.core.metrics import MetricsMiddleware, RuntimeCollector
 
 
 def create_app(services: Services | None = None) -> FastAPI:
@@ -32,6 +33,7 @@ def create_app(services: Services | None = None) -> FastAPI:
         owned = services is None
         app.state.services = services or await create_services()
         await app.state.services.start()  # MemoryManager worker
+        RuntimeCollector.services = app.state.services  # queue depth, breakers at scrape time
         logger.info("Application ready")
         try:
             yield
@@ -51,6 +53,7 @@ def create_app(services: Services | None = None) -> FastAPI:
     )
 
     app.add_middleware(TraceIDMiddleware)
+    app.add_middleware(MetricsMiddleware)  # outermost: times everything, including errors
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
@@ -61,7 +64,7 @@ def create_app(services: Services | None = None) -> FastAPI:
     install_error_handlers(app)
 
     app.include_router(health.router, prefix="/api/v1")
-    app.include_router(health.router)  # root health for load balancers
+    app.include_router(health.router)  # root /health, /health/ready, /metrics for platforms
     app.include_router(auth.router, prefix="/api/v1")
     app.include_router(chat.router, prefix="/api/v1")
     app.include_router(me.router, prefix="/api/v1")

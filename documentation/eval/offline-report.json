@@ -1,0 +1,163 @@
+{
+  "generated_at": "2026-09-27T05:12:23+00:00",
+  "results": {
+    "routing": {
+      "metrics": {
+        "agent_accuracy": 0.9778,
+        "n": 45
+      },
+      "per_class": {
+        "advisor": {
+          "precision": 1.0,
+          "recall": 0.857,
+          "f1": 0.923,
+          "support": 7
+        },
+        "critic": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 8
+        },
+        "general": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 6
+        },
+        "synthesizer": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 10
+        },
+        "tutor": {
+          "precision": 0.933,
+          "recall": 1.0,
+          "f1": 0.966,
+          "support": 14
+        }
+      },
+      "confusion": {
+        "tutor": {
+          "tutor": 14
+        },
+        "synthesizer": {
+          "synthesizer": 10
+        },
+        "critic": {
+          "critic": 8
+        },
+        "advisor": {
+          "advisor": 6,
+          "tutor": 1
+        },
+        "general": {
+          "general": 6
+        }
+      },
+      "failures": [
+        {
+          "query": "What are the prerequisites for understanding Mamba?",
+          "expected": "advisor",
+          "got": "tutor"
+        }
+      ]
+    },
+    "domain": {
+      "metrics": {
+        "false_refusal_rate": 0.0,
+        "off_topic_recall": 1.0,
+        "n": 40
+      },
+      "failures": []
+    },
+    "tutor": {
+      "metrics": {
+        "action_accuracy": 1.0,
+        "n": 33
+      },
+      "failures": []
+    },
+    "citation_function": {
+      "metrics": {
+        "macro_f1": 0.8542,
+        "accuracy": 0.85,
+        "n": 40
+      },
+      "per_class": {
+        "builds_on": {
+          "precision": 0.909,
+          "recall": 1.0,
+          "f1": 0.952,
+          "support": 10
+        },
+        "comparative": {
+          "precision": 1.0,
+          "recall": 0.889,
+          "f1": 0.941,
+          "support": 9
+        },
+        "critical": {
+          "precision": 1.0,
+          "recall": 0.615,
+          "f1": 0.762,
+          "support": 13
+        },
+        "neutral": {
+          "precision": 0.615,
+          "recall": 1.0,
+          "f1": 0.762,
+          "support": 8
+        }
+      },
+      "failures": [
+        {
+          "sentence": "As noted by [5], this estimator is biased for small samples.",
+          "expected": "critical",
+          "got": "neutral"
+        },
+        {
+          "sentence": "Unfortunately, [11] reports results on a single seed only.",
+          "expected": "critical",
+          "got": "neutral"
+        },
+        {
+          "sentence": "However, we use a larger batch size than [2].",
+          "expected": "comparative",
+          "got": "builds_on"
+        },
+        {
+          "sentence": "While [5] is elegant, its memory cost grows quadratically.",
+          "expected": "critical",
+          "got": "neutral"
+        },
+        {
+          "sentence": "We note that [9] evaluates only on English.",
+          "expected": "critical",
+          "got": "neutral"
+        },
+        {
+          "sentence": "Recent work questions the robustness of these results [10].",
+          "expected": "critical",
+          "got": "neutral"
+        }
+      ]
+    },
+    "guardrail": {
+      "metrics": {
+        "decision_accuracy": 1.0,
+        "n": 10
+      },
+      "failures": []
+    },
+    "templates": {
+      "metrics": {
+        "valid": 1.0,
+        "templates": 10
+      },
+      "failures": []
+    }
+  },
+  "violations": []
+}

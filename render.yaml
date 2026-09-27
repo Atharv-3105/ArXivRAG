@@ -1,0 +1,41 @@
+# Render blueprint for the web API (one free-tier option; see documentation/deployment.md).
+# Postgres and Qdrant are external managed free tiers; their URLs are set as secrets in the
+# Render dashboard (sync: false = never stored in this file).
+services:
+  - type: web
+    name: arxivmind-api
+    runtime: image
+    image:
+      # Pushed by CI as ghcr.io/<owner>/<repo>. No git remote is configured yet: set this to your
+      # repository's image. Pin a :<git-sha> tag instead of :latest to roll back.
+      url: ghcr.io/OWNER/REPO:latest
+    plan: free
+    healthCheckPath: /health/ready # a new deploy only takes traffic once ready
+    dockerCommand: uvicorn src.api.app:app --host 0.0.0.0 --port 10000 --proxy-headers
+    envVars:
+      - key: ENVIRONMENT
+        value: prod
+      - key: PORT
+        value: "10000"
+      - key: MODEL_CACHE_DIR
+        value: /tmp/models
+      - key: SECRET_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: METRICS_TOKEN
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: CEREBRAS_API_KEY
+        sync: false

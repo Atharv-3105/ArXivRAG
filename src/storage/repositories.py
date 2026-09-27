@@ -185,7 +185,7 @@ class PgRepo:
             math_fidelity=paper.math_fidelity or "degraded",
         )
 
-    async def start_run(self, session: AsyncSession, query: str) -> int:
+    async def start_run(self, session: AsyncSession, query: str | None) -> int:
         result = await session.execute(
             insert(IngestionRun).values(query=query).returning(IngestionRun.id)
         )

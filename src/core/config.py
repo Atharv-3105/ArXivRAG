@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     DEBUG: bool = Field(default=False, description="Enable debug mode")
     LOG_LEVEL: str = Field(default="INFO", description="Logging Level")
     SECRET_KEY: str = Field(..., description="Signs JWTs. Required; use >=32 random chars")
+    SECRET_KEY_PREVIOUS: str | None = Field(
+        default=None, description="Rotation window: tokens signed with it still verify"
+    )
 
     # API
     HOST: str = Field(default="0.0.0.0")
@@ -181,9 +184,27 @@ class Settings(BaseSettings):
     ADVISOR_CANDIDATES: int = Field(default=10, ge=3, le=30)
     ADVISOR_MAX_RECOMMENDATIONS: int = Field(default=5, ge=1, le=10)
 
+    # Guardrail (Phase 6)
+    GUARDRAIL_ENABLED: bool = Field(default=True, description="Post-answer grounding checks")
+    GUARDRAIL_DOMAIN_GATE: bool = Field(
+        default=True, description="Refuse clearly non-ML questions without an LLM call"
+    )
+    GUARDRAIL_MODERATION: bool = Field(
+        default=False, description="LLM moderation of inputs (costs one call per message)"
+    )
+    GUARDRAIL_MIN_SUPPORT: float = Field(
+        default=0.25, ge=0, le=1, description="Min word overlap of a cited claim with its source"
+    )
+    GUARDRAIL_MAX_UNCITED: float = Field(
+        default=0.5, ge=0, le=1, description="Max share of substantive sentences without [n]"
+    )
+
     # Observability
     LANGSMITH_TRACING: bool = Field(default=False, description="Opt-in: sends traces to a cloud")
     METRICS_ENABLED: bool = True
+    METRICS_TOKEN: str | None = Field(
+        default=None, description="If set, /metrics requires 'Authorization: Bearer <token>'"
+    )
 
     @field_validator("LOG_LEVEL")
     @classmethod

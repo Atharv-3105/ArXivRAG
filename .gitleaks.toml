@@ -1,0 +1,13 @@
+# Secret scanning (CI job "secret scan"). Default rules, plus an allowlist for the deliberately
+# fake values that tests and CI use - each contains a marker no real secret would.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Obviously fake test/CI values"
+regexes = [
+  '''not-for-production''',
+  '''not-a-real''',
+  '''smoke-test-secret-key''',
+  '''correct horse''',
+]

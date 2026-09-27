@@ -107,8 +107,11 @@ _ALIASES = sorted(
     key=lambda pair: len(pair[0]),
     reverse=True,
 )
+# Optional plural suffix: "VAEs", "GANs", "transformers" match their singular alias. Without it,
+# "What does the reparameterization trick in VAEs do?" found no concept and the domain gate
+# refused it (caught by the offline routing eval).
 _PATTERN = re.compile(
-    r"(?<![\w-])(" + "|".join(re.escape(alias) for alias, _ in _ALIASES) + r")(?![\w-])",
+    r"(?<![\w-])(" + "|".join(re.escape(alias) for alias, _ in _ALIASES) + r")(?:e?s)?(?![\w-])",
     re.IGNORECASE,
 )
 _SLUG_OF = {alias.lower(): slug for alias, slug in _ALIASES}

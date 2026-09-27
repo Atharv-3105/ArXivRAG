@@ -66,20 +66,27 @@ class ArxivFetcher:
     @_retry_transient
     async def fetch_papers(
         self,
-        query: str,
+        query: str | None,
         max_results: int = 10,
         start: int = 0,
         sort_by: str | None = None,
         sort_order: str = "descending",
+        id_list: list[str] | None = None,
     ) -> list[PaperMetadata]:
-        """Fetch paper metadata from the arXiv API (rate-limited, retried on transient errors)."""
+        """Fetch paper metadata from the arXiv API (rate-limited, retried on transient errors).
+
+        `id_list` fetches exact papers (arXiv's `id_list` parameter): how the evaluation corpus
+        is seeded reproducibly, independent of what a search query returns today."""
         params: dict[str, str | int] = {
-            "search_query": query,
             "start": start,
-            "max_results": max_results,
+            "max_results": max_results if not id_list else len(id_list),
             "sortBy": sort_by or settings.ARXIV_SORT_BY,
             "sortOrder": sort_order,
         }
+        if query:
+            params["search_query"] = query
+        if id_list:
+            params["id_list"] = ",".join(id_list)
         logger.info("Fetching papers from ArXiv", query=query, max_results=max_results, start=start)
 
         async with self._throttled():

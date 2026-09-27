@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse
 
 from src.api.deps import services
 from src.api.services import Services
+from src.core import metrics
 from src.core.config import settings
 from src.core.exceptions import NotFoundError, RateLimitError, RetrievalError
 
@@ -34,6 +35,7 @@ async def public_limit(request: Request, svc: Services = Depends(services)) -> N
     ip = request.client.host if request.client else "unknown"
     wait = svc.public_limiter.hit(ip)
     if wait is not None:
+        metrics.RATE_LIMITED.labels("public_ip").inc()
         raise RateLimitError("Too many requests", retry_after=max(1, int(wait) + 1))
 
 

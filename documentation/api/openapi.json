@@ -1,0 +1,1843 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ArXivMind",
+    "version": "0.2.0"
+  },
+  "paths": {
+    "/api/v1/health/live": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health Check",
+        "operationId": "health_check_api_v1_health_live_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health Check",
+        "operationId": "health_check_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/ready": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Readiness",
+        "operationId": "readiness_api_v1_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/live": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health Check",
+        "operationId": "health_check_health_live_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health Check",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Readiness",
+        "operationId": "readiness_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Register",
+        "operationId": "register_api_v1_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Registration"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Login",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Credentials"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Chat",
+        "operationId": "chat_api_v1_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/chat/stream": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Chat Stream",
+        "operationId": "chat_stream_api_v1_chat_stream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/feedback": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Feedback",
+        "description": "202: accepted for asynchronous processing - the profile changes shortly after.",
+        "operationId": "feedback_api_v1_feedback_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Feedback"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Feedback Api V1 Feedback Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Me",
+        "operationId": "me_api_v1_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Delete Account",
+        "description": "GDPR Art. 17: erase the account and everything it owns.",
+        "operationId": "delete_account_api_v1_me_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAccount"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/profile": {
+      "patch": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Update Profile",
+        "operationId": "update_profile_api_v1_me_profile_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/mastery": {
+      "get": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Mastery",
+        "operationId": "mastery_api_v1_me_mastery_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MasteryOut"
+                  },
+                  "type": "array",
+                  "title": "Response Mastery Api V1 Me Mastery Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/mastery/{concept}": {
+      "put": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Set Mastery",
+        "operationId": "set_mastery_api_v1_me_mastery__concept__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "concept",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Concept"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasteryUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasteryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/reviews": {
+      "get": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Due Reviews",
+        "description": "Concepts whose spaced-repetition review is due (the tutor's quiz queue in Phase 5).",
+        "operationId": "due_reviews_api_v1_me_reviews_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MasteryOut"
+                  },
+                  "title": "Response Due Reviews Api V1 Me Reviews Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/audit": {
+      "get": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Audit",
+        "description": "Every change to the profile and to mastery, with its source (explicit or inferred).",
+        "operationId": "audit_api_v1_me_audit_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/export": {
+      "get": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Export",
+        "description": "GDPR Art. 15/20: everything stored about the user, machine-readable.",
+        "operationId": "export_api_v1_me_export_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/conversations": {
+      "get": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "List Conversations",
+        "operationId": "list_conversations_api_v1_conversations_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversation_id}": {
+      "get": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Get Conversation",
+        "operationId": "get_conversation_api_v1_conversations__conversation_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Conversation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/papers/top": {
+      "get": {
+        "tags": [
+          "Papers"
+        ],
+        "summary": "Top",
+        "description": "Most influential papers in the corpus (PageRank; 1.0 = average).",
+        "operationId": "top_api_v1_papers_top_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/papers/missing": {
+      "get": {
+        "tags": [
+          "Papers"
+        ],
+        "summary": "Missing",
+        "description": "arXiv papers our corpus cites most but does not contain: what to ingest next.",
+        "operationId": "missing_api_v1_papers_missing_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/papers/{arxiv_id}/graph": {
+      "get": {
+        "tags": [
+          "Papers"
+        ],
+        "summary": "Neighborhood",
+        "description": "Nodes and edges around a paper, for a force-directed view. Edges carry the strongest\ncitation function found (\"critical\" > \"comparative\" > \"builds_on\" > \"neutral\").",
+        "operationId": "neighborhood_api_v1_papers__arxiv_id__graph_get",
+        "parameters": [
+          {
+            "name": "arxiv_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Arxiv Id"
+            }
+          },
+          {
+            "name": "depth",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 2,
+              "minimum": 1,
+              "default": 1,
+              "title": "Depth"
+            }
+          },
+          {
+            "name": "max_nodes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 150,
+              "minimum": 5,
+              "default": 80,
+              "title": "Max Nodes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/papers/{arxiv_id}/prerequisites": {
+      "get": {
+        "tags": [
+          "Papers"
+        ],
+        "summary": "Prerequisites",
+        "description": "In-corpus papers this one builds on, nearest first, then most influential.",
+        "operationId": "prerequisites_api_v1_papers__arxiv_id__prerequisites_get",
+        "parameters": [
+          {
+            "name": "arxiv_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Arxiv Id"
+            }
+          },
+          {
+            "name": "depth",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 4,
+              "minimum": 1,
+              "default": 2,
+              "title": "Depth"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/papers/{arxiv_id}/citations": {
+      "get": {
+        "tags": [
+          "Papers"
+        ],
+        "summary": "Citations",
+        "description": "What other papers in the corpus say about this one (the citing sentences).",
+        "operationId": "citations_api_v1_papers__arxiv_id__citations_get",
+        "parameters": [
+          {
+            "name": "arxiv_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Arxiv Id"
+            }
+          },
+          {
+            "name": "function",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "critical|comparative|builds_on|neutral",
+              "title": "Function"
+            },
+            "description": "critical|comparative|builds_on|neutral"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/papers/{arxiv_id}": {
+      "get": {
+        "tags": [
+          "Papers"
+        ],
+        "summary": "Paper",
+        "operationId": "paper_api_v1_papers__arxiv_id__get",
+        "parameters": [
+          {
+            "name": "arxiv_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Arxiv Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ChatRequest": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Message"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "action": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "answer",
+                  "hint",
+                  "dont_understand",
+                  "skip",
+                  "review",
+                  "read",
+                  "next",
+                  "equation"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "paper_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paper Id",
+            "description": "for read / equation"
+          },
+          "equation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equation",
+            "description": "e.g. \"3\""
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "ChatRequest"
+      },
+      "ChatResponse": {
+        "properties": {
+          "conversation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conversation Id"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "intent": {
+            "type": "string",
+            "title": "Intent"
+          },
+          "agent": {
+            "type": "string",
+            "title": "Agent"
+          },
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "concepts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Concepts"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "type": "array",
+            "title": "Citations"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/Source"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "ungrounded": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Ungrounded"
+          },
+          "degraded": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Degraded"
+          },
+          "graph_status": {
+            "type": "string",
+            "title": "Graph Status"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "prompt_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Version"
+          },
+          "checks": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Checks"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          },
+          "tutor": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tutor"
+          },
+          "guardrail": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guardrail"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "conversation_id",
+          "answer",
+          "intent",
+          "agent",
+          "action",
+          "concepts",
+          "citations",
+          "sources",
+          "ungrounded",
+          "degraded",
+          "graph_status",
+          "provider",
+          "model",
+          "prompt_version",
+          "checks",
+          "verdict",
+          "tutor",
+          "guardrail",
+          "trace_id"
+        ],
+        "title": "ChatResponse"
+      },
+      "Citation": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "title": "N"
+          },
+          "paper_id": {
+            "type": "string",
+            "title": "Paper Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "section": {
+            "type": "string",
+            "title": "Section"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "n",
+          "paper_id",
+          "title",
+          "section",
+          "url"
+        ],
+        "title": "Citation"
+      },
+      "Credentials": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "Credentials"
+      },
+      "DeleteAccount": {
+        "properties": {
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "password"
+        ],
+        "title": "DeleteAccount"
+      },
+      "Feedback": {
+        "properties": {
+          "signal": {
+            "type": "string",
+            "enum": [
+              "understood",
+              "confused",
+              "helpful",
+              "not_helpful"
+            ],
+            "title": "Signal"
+          },
+          "concepts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Concepts"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "signal"
+        ],
+        "title": "Feedback",
+        "description": "`understood`/`confused` are evidence about the learner (they move mastery);\n`helpful`/`not_helpful` rate the answer (recorded for evaluation, mastery untouched)."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "MasteryOut": {
+        "properties": {
+          "concept": {
+            "type": "string",
+            "title": "Concept"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "mastery": {
+            "type": "number",
+            "title": "Mastery"
+          },
+          "stored": {
+            "type": "number",
+            "title": "Stored"
+          },
+          "evidence": {
+            "type": "integer",
+            "title": "Evidence"
+          },
+          "locked": {
+            "type": "boolean",
+            "title": "Locked"
+          },
+          "next_review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Review At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "concept",
+          "label",
+          "mastery",
+          "stored",
+          "evidence",
+          "locked",
+          "next_review_at"
+        ],
+        "title": "MasteryOut"
+      },
+      "MasteryUpdate": {
+        "properties": {
+          "mastery": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mastery",
+            "description": "null unlocks (back to inference)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mastery"
+        ],
+        "title": "MasteryUpdate"
+      },
+      "ProfileOut": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "is_admin": {
+            "type": "boolean",
+            "title": "Is Admin"
+          },
+          "profile": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Profile"
+          },
+          "locked_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Locked Fields"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "email",
+          "display_name",
+          "is_admin",
+          "profile",
+          "locked_fields"
+        ],
+        "title": "ProfileOut"
+      },
+      "ProfileUpdate": {
+        "properties": {
+          "expertise_level": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "beginner",
+                  "intermediate",
+                  "advanced"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expertise Level"
+          },
+          "math_depth": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "light",
+                  "standard",
+                  "rigorous"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Math Depth"
+          },
+          "goals": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goals"
+          },
+          "interests": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interests"
+          },
+          "unlock": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "expertise_level",
+                "math_depth",
+                "goals",
+                "interests"
+              ]
+            },
+            "type": "array",
+            "title": "Unlock"
+          }
+        },
+        "type": "object",
+        "title": "ProfileUpdate",
+        "description": "Explicit values: applied, audited, and locked against inference until unlocked."
+      },
+      "Registration": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Password"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "Registration"
+      },
+      "Source": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "title": "N"
+          },
+          "chunk_id": {
+            "type": "string",
+            "title": "Chunk Id"
+          },
+          "paper_id": {
+            "type": "string",
+            "title": "Paper Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "section": {
+            "type": "string",
+            "title": "Section"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "math_fidelity": {
+            "type": "string",
+            "title": "Math Fidelity"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "published": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published"
+          }
+        },
+        "type": "object",
+        "required": [
+          "n",
+          "chunk_id",
+          "paper_id",
+          "title",
+          "section",
+          "content",
+          "score",
+          "url",
+          "math_fidelity",
+          "role"
+        ],
+        "title": "Source"
+      },
+      "Token": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "expires_in": {
+            "type": "integer",
+            "title": "Expires In"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "expires_in",
+          "user_id"
+        ],
+        "title": "Token"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

@@ -4,6 +4,7 @@ Tests build a `Services` with fakes and hand it to `create_app(services=...)`, s
 Qdrant, Postgres or an API key.
 """
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -14,6 +15,7 @@ from src.api.limits import SlidingWindowLimiter
 from src.auth.users import PgUserStore, UserStore
 from src.core.config import settings
 from src.core.exceptions import IndexError
+from src.core.metrics import observe_llm
 from src.graph.store import GraphStore, PgGraphStore
 from src.llm.registry import build_router
 from src.llm.router import LLMRouter
@@ -43,6 +45,9 @@ class Services:
         default_factory=lambda: SlidingWindowLimiter(settings.RATE_LIMIT_PUBLIC_PER_MINUTE)
     )
     graph: Any = None  # compiled LangGraph
+    # Readiness probes: name -> async callable that raises when the dependency is down.
+    probes: dict[str, Callable[[], Awaitable[Any]]] = field(default_factory=dict)
+    required_probes: tuple[str, ...] = ("database",)
 
     def __post_init__(self) -> None:
         if self.graph is None:
@@ -89,12 +94,25 @@ async def create_services() -> Services:
     except Exception as e:
         logger.error("Qdrant unavailable at startup; answers will degrade", error=str(e))
 
+    async def database() -> None:
+        from sqlalchemy import text
+
+        from src.storage.database import get_async_session
+
+        async with get_async_session() as session:
+            await session.execute(text("SELECT 1"))
+
+    async def qdrant() -> None:
+        if not await store.client.collection_exists(store.collection):
+            raise RuntimeError("collection missing")
+
     return Services(
-        llm=build_router(),
+        llm=build_router(observer=observe_llm),
         retriever=store,
         conversations=PgConversationStore(),
         users=PgUserStore(),
         profiles=PgProfileStore(),
         graph_store=PgGraphStore(),
         content=PgPaperContent(),
+        probes={"database": database, "qdrant": qdrant},
     )

@@ -19,6 +19,7 @@ the query's concepts -> graph -> save turn -> MemoryManager.submit (never awaite
 """
 
 import json
+import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -37,6 +38,7 @@ from src.api.errors import retry_after_of
 from src.api.limits import enforce_chat_limits
 from src.api.services import Services
 from src.auth.users import UserRecord
+from src.core import metrics
 from src.core.config import settings
 from src.core.exceptions import ArxivMindError, NotFoundError
 from src.core.logging import current_trace_id
@@ -79,6 +81,7 @@ class ChatResponse(BaseModel):
     checks: dict[str, bool]
     verdict: str | None
     tutor: dict | None
+    guardrail: dict | None
     trace_id: str | None
 
 
@@ -193,9 +196,13 @@ async def _finish(svc: Services, turn: Turn, state: dict) -> None:
             "trace_id": trace_id,
             "agent": state.get("agent"),
             "prompt_version": state.get("prompt_version"),
-            "checks": state.get("checks") or None,
+            "checks": {
+                **(state.get("checks") or {}),
+                "guardrail_approved": (state.get("guardrail") or {}).get("approved", True),
+            },
         },
     ]
+    _record_metrics(state)
     try:
         await svc.conversations.append(
             turn.user.id,
@@ -220,6 +227,19 @@ async def _finish(svc: Services, turn: Turn, state: dict) -> None:
         )
     for event in state.get("learning_events") or []:
         svc.memory.submit(MemoryEvent(user_id=turn.user.id, **event))
+
+
+def _record_metrics(state: dict) -> None:
+    agent = state.get("agent") or "general"
+    outcome = "degraded" if state.get("degraded") else "ok"
+    metrics.CHAT_TURNS.labels(
+        agent, state.get("tutor_action") or "-", state.get("provider") or "-", outcome
+    ).inc()
+    for check, ok in (state.get("checks") or {}).items():
+        if not ok:
+            metrics.CHECK_FAILURES.labels(agent, check).inc()
+    if state.get("graph_status"):
+        metrics.GRAPH_RETRIEVAL.labels(state["graph_status"]).inc()
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -249,6 +269,7 @@ async def chat(
         checks=state.get("checks") or {},
         verdict=state.get("verdict"),
         tutor=tutor_mod.public_view(state.get("tutor_state")),
+        guardrail=state.get("guardrail"),
         trace_id=current_trace_id(),
     )
 
@@ -264,6 +285,7 @@ async def chat_stream(
     svc: Services = Depends(services),
 ) -> StreamingResponse:
     # Limits, auth and ownership fail as normal HTTP errors, before the stream starts.
+    started = time.perf_counter()
     turn = await _prepare(svc, user, body)
     trace_id = current_trace_id()
 
@@ -277,11 +299,17 @@ async def chat_stream(
             },
         )
         final: dict = {}
+        first_token_seen = False
         try:
             async for mode, payload in svc.graph.astream(
                 turn.graph_input, stream_mode=["custom", "updates"]
             ):
                 if mode == "custom":
+                    if payload["type"] == "token" and not first_token_seen:
+                        first_token_seen = True
+                        metrics.FIRST_TOKEN.labels(final.get("agent") or "-").observe(
+                            time.perf_counter() - started
+                        )
                     yield sse(payload["type"], {k: v for k, v in payload.items() if k != "type"})
                     continue
                 for node, update in payload.items():
@@ -302,6 +330,7 @@ async def chat_stream(
                         )
         except ArxivMindError as e:
             logger.error("Stream failed", code=e.code, error=e.message)
+            metrics.CHAT_TURNS.labels(final.get("agent") or "-", "-", "-", "error").inc()
             data: dict[str, object] = {"code": e.code, "message": e.message}
             if (retry_after := retry_after_of(e)) is not None:
                 data["retry_after"] = retry_after
@@ -328,6 +357,7 @@ async def chat_stream(
                 "checks": final.get("checks") or {},
                 "verdict": final.get("verdict"),
                 "tutor": tutor_mod.public_view(final.get("tutor_state")),
+                "guardrail": final.get("guardrail"),
                 "timings": final.get("timings", {}),
             },
         )

@@ -75,8 +75,9 @@ async def run_pipeline(
     cache_dir: str | None = None,
     max_papers: int | None = None,
     reingest: bool = False,
+    ids: list[str] | None = None,
 ) -> PipelineMetrics:
-    query = query or settings.ARXIV_QUERY
+    query = None if ids and not query else (query or settings.ARXIV_QUERY)
     max_papers = max_papers or settings.ARXIV_MAX_RESULTS
     cache = Path(cache_dir or settings.CACHE_DIR)
 
@@ -98,7 +99,7 @@ async def run_pipeline(
     logger.info("Pipeline started", run_id=run_id, query=query, max_papers=max_papers)
     status = "failed"
     try:
-        papers = await fetcher.fetch_papers(query=query, max_results=max_papers)
+        papers = await fetcher.fetch_papers(query=query, max_results=max_papers, id_list=ids)
         metrics.fetched = len(papers)
 
         for paper in papers:
@@ -219,6 +220,7 @@ def main() -> None:
     cli = argparse.ArgumentParser(description="Ingest arXiv papers into Postgres + Qdrant")
     cli.add_argument("--query", help="arXiv search_query (default: ARXIV_QUERY from settings)")
     cli.add_argument("--max-papers", type=int, help="default: ARXIV_MAX_RESULTS")
+    cli.add_argument("--ids", help="comma-separated arXiv ids to fetch exactly (overrides query)")
     cli.add_argument("--cache-dir", help="where HTML/PDF are cached (default: CACHE_DIR)")
     cli.add_argument(
         "--reingest",
@@ -228,7 +230,8 @@ def main() -> None:
     args = cli.parse_args()
 
     setup_logging()
-    asyncio.run(run_pipeline(args.query, args.cache_dir, args.max_papers, args.reingest))
+    ids = [i.strip() for i in args.ids.split(",") if i.strip()] if args.ids else None
+    asyncio.run(run_pipeline(args.query, args.cache_dir, args.max_papers, args.reingest, ids))
 
 
 if __name__ == "__main__":

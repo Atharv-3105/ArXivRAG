@@ -145,8 +145,12 @@ class VectorStore:
         query: str,
         top_k: int | None = None,
         paper_ids: list[str] | None = None,
+        mode: str = "hybrid",
     ) -> list[SearchHit]:
-        """Hybrid search: dense and BM25 candidates, fused with RRF in one Qdrant round trip."""
+        """Hybrid search: dense and BM25 candidates, fused with RRF in one Qdrant round trip.
+
+        `mode` = "dense" | "sparse" runs one branch alone: used by the retrieval ablation
+        (src/eval/live.py) to measure what each branch and the fusion contribute."""
         top_k = top_k or settings.RETRIEVAL_TOP_K
         dense = await asyncio.to_thread(self.embedder.encode_query, query)
         sparse = await asyncio.to_thread(self.embedder.encode_sparse_query, query)
@@ -166,15 +170,27 @@ class VectorStore:
                 filter=flt,
             ),
         ]
+        single = {"dense": prefetch[0], "sparse": prefetch[1]}.get(mode)
         try:
-            response = await self.client.query_points(
-                collection_name=self.collection,
-                prefetch=prefetch,
-                query=models.FusionQuery(fusion=models.Fusion.RRF),
-                limit=top_k,
-                with_payload=True,
-                timeout=int(settings.DEPENDENCY_TIMEOUT_SECONDS) or 1,
-            )
+            if single is not None:
+                response = await self.client.query_points(
+                    collection_name=self.collection,
+                    query=single.query,
+                    using=single.using,
+                    query_filter=flt,
+                    limit=top_k,
+                    with_payload=True,
+                    timeout=int(settings.DEPENDENCY_TIMEOUT_SECONDS) or 1,
+                )
+            else:
+                response = await self.client.query_points(
+                    collection_name=self.collection,
+                    prefetch=prefetch,
+                    query=models.FusionQuery(fusion=models.Fusion.RRF),
+                    limit=top_k,
+                    with_payload=True,
+                    timeout=int(settings.DEPENDENCY_TIMEOUT_SECONDS) or 1,
+                )
         except Exception as e:
             raise RetrievalError(f"Qdrant search failed: {e}", code="VECTOR_SEARCH_ERROR") from e
 

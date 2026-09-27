@@ -49,6 +49,8 @@ _RULES: dict[Intent, list[str]] = {
         r"\bstate of the art\b",
         r"\bsota\b",
         r"\bhow do .+ differ\b",
+        r"\bcontrast\b",
+        r"\bbetter than\b",
     ],
     "recommend": [
         r"\brecommend",
@@ -77,7 +79,28 @@ _RULES: dict[Intent, list[str]] = {
         r"\bdefine\b",
     ],
 }
-_COMPILED = {intent: [re.compile(p, re.IGNORECASE) for p in ps] for intent, ps in _RULES.items()}
+# Evidence is not equal. A question form ("what are...", "how do...") says little about what
+# the user wants done; a specific cue ("weaknesses", "consensus", "differ") says a lot. Unweighted,
+# "What are the weaknesses of X?" tied learn with critique and fell back to chat - the offline
+# routing eval surfaced this (documentation/eval/offline-report.md).
+_WEIGHTS = {
+    r"\bwhat (is|are|does)\b": 0.5,
+    r"\bhow (does|do|is|can)\b": 0.5,
+    r"\bwhy (does|do|is)\b": 0.5,
+    r"\bcompar": 1.5,
+    r"\bversus\b": 1.5,
+    r"\bvs\.?\b": 1.5,
+    r"\bdifference(s)? between\b": 1.5,
+    r"\bhow do .+ differ\b": 1.5,
+    r"\bconsensus\b": 1.5,
+    r"\bcontrast\b": 1.5,
+    r"\bbetter than\b": 1.5,
+    r"\btrend": 1.5,
+}
+_COMPILED = {
+    intent: [(re.compile(p, re.IGNORECASE), _WEIGHTS.get(p, 1.0)) for p in ps]
+    for intent, ps in _RULES.items()
+}
 _SMALLTALK = re.compile(
     r"^\s*(hi|hello|hey|thanks|thank you|thx|ok(ay)?|cool|great|bye|good (morning|evening))"
     r"[\s!.?]*$",
@@ -99,7 +122,7 @@ def is_smalltalk(text: str) -> bool:
 def classify_rules(text: str) -> IntentResult:
     if is_smalltalk(text):
         return IntentResult("chat", 1.0, "smalltalk")
-    scores = {i: sum(1 for p in ps if p.search(text)) for i, ps in _COMPILED.items()}
+    scores = {i: sum(w for p, w in ps if p.search(text)) for i, ps in _COMPILED.items()}
     ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
     (best, top), (_, second) = ranked[0], ranked[1]
     if top == 0:
