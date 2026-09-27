@@ -52,6 +52,12 @@ async def top(limit: int = Query(20, ge=1, le=100), svc: Services = Depends(serv
     return await _graph(svc).top_influential(limit)
 
 
+@router.get("/map", dependencies=[Depends(public_limit)])
+async def paper_map(limit: int = Query(80, ge=5, le=300), svc: Services = Depends(services)):
+    """The most influential papers and the citation edges among them, for the map view."""
+    return await _graph(svc).map(limit)
+
+
 @router.get("/missing", dependencies=[Depends(public_limit)])
 async def missing(limit: int = Query(20, ge=1, le=100), svc: Services = Depends(services)):
     """arXiv papers our corpus cites most but does not contain: what to ingest next."""

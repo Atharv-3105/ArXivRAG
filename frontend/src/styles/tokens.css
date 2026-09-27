@@ -1,0 +1,44 @@
+/* Margin: the app's design system. Typeset pages on cool paper, one ink-blue accent.
+   The map screen adds Atlas's cartographic palette (--map-*) and faces. */
+:root {
+  --paper: #F6F7F4;
+  --paper-raised: #FFFFFF;
+  --ink: #1B1F2A;
+  --ink-muted: #5B6272;
+  --rule: #D5D9E0;
+  --rule-strong: #C3C9D3;
+  --accent: #2743A6;
+  --accent-deep: #1B2F7A;
+  --accent-wash: #E4E8F3;
+  --accent-track: #DDE2EC;
+  --notice: #8A5D0E;
+  --notice-wash: #FBF3E2;
+  --danger: #A12B2B;
+
+  --map-ground: #E7ECE9;
+  --map-contour: #BCCAC4;
+  --map-ink: #1D2B2E;
+  --map-muted: #4E5F62;
+  --map-studied: #155E63;
+  --map-ring: #3F5456;
+  --map-trail: #2F6F9F;
+  --map-critical: #C98A1B;
+  --map-sheet: #FBFCFB;
+
+  --serif: "STIX Two Text", "STIX Two", Georgia, serif;
+  --sans: "Schibsted Grotesk", system-ui, sans-serif;
+  --map-sans: "IBM Plex Sans Condensed", "Schibsted Grotesk", sans-serif;
+  --map-serif: "Newsreader", Georgia, serif;
+
+  /* Type scale (1.2 ratio around a 20px reading size) */
+  --t-body: 20px;
+  --t-lede: 22px;
+  --t-small: 14px;
+  --t-ui: 15px;
+  --t-h1: 28px;
+
+  --column: 680px;
+  --margin-col: 272px;
+  --gutter: 64px;
+  --radius: 8px;
+}

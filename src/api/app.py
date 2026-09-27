@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.agents.prompts import validate_templates
 from src.api.errors import install_error_handlers
+from src.api.frontend import dist_dir, mount_frontend
 from src.api.routes import auth, chat, health, me, papers
 from src.api.services import Services, create_services
 from src.core.config import settings
@@ -70,6 +71,8 @@ def create_app(services: Services | None = None) -> FastAPI:
     app.include_router(me.router, prefix="/api/v1")
     app.include_router(papers.router, prefix="/api/v1")
     app.include_router(papers.ui_router)
+    if mount_frontend(app):  # last: its fallback route catches every other path
+        logger.info("Serving the web app", dist=str(dist_dir()))
     return app
 
 

@@ -12,13 +12,27 @@ NotFoundError always propagates.
 from datetime import UTC, datetime
 from typing import Protocol
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 
 from src.core.exceptions import NotFoundError
 from src.storage.database import Conversation, Message, get_async_session
 
 NOT_FOUND = "Conversation not found"
+
+_CITED = text(
+    """
+    SELECT c->>'paper_id' AS paper_id, max(c->>'title') AS title, count(*) AS times,
+           max(m.created_at) AS last_at
+    FROM messages m
+    JOIN conversations cv ON cv.id = m.conversation_id
+    CROSS JOIN LATERAL jsonb_array_elements(COALESCE(m.citations, '[]'::jsonb)) AS c
+    WHERE cv.user_id = :u AND m.role = 'assistant'
+    GROUP BY 1
+    ORDER BY last_at DESC
+    LIMIT :limit
+    """
+)
 
 
 class ConversationStore(Protocol):
@@ -36,6 +50,8 @@ class ConversationStore(Protocol):
     async def get_state(self, user_id: int, conversation_id: str) -> dict | None: ...
 
     async def list_conversations(self, user_id: int, limit: int) -> list[dict]: ...
+
+    async def cited_papers(self, user_id: int, limit: int) -> list[dict]: ...
 
     async def messages(self, user_id: int, conversation_id: str) -> list[dict]: ...
 
@@ -128,6 +144,15 @@ class PgConversationStore:
                 {"id": r.id, "title": r.title, "updated_at": r.updated_at.isoformat()} for r in rows
             ]
 
+    async def cited_papers(self, user_id, limit) -> list[dict]:
+        """Papers the user's answers cited: "papers you have studied" on the map."""
+        async with get_async_session() as session:
+            rows = (await session.execute(_CITED, {"u": user_id, "limit": limit})).mappings().all()
+        return [
+            {**row, "last_at": row["last_at"].isoformat() if row["last_at"] else None}
+            for row in rows
+        ]
+
     async def messages(self, user_id, conversation_id) -> list[dict]:
         async with get_async_session() as session:
             if await self._owner(session, conversation_id) != user_id:
@@ -217,6 +242,26 @@ class InMemoryConversationStore:
         if not self._check(user_id, conversation_id):
             raise NotFoundError(NOT_FOUND, code="CONVERSATION_NOT_FOUND")
         return list(self.data[conversation_id])
+
+    async def cited_papers(self, user_id, limit):
+        seen: dict[str, dict] = {}
+        for cid, owner in self.owners.items():
+            if owner != user_id:
+                continue
+            for m in self.data.get(cid, []):
+                for c in m.get("citations") or []:
+                    row = seen.setdefault(
+                        c["paper_id"],
+                        {
+                            "paper_id": c["paper_id"],
+                            "title": c["title"],
+                            "times": 0,
+                            "last_at": None,
+                        },
+                    )
+                    row["times"] += 1
+                    row["last_at"] = m["at"].isoformat()
+        return sorted(seen.values(), key=lambda r: r["last_at"] or "", reverse=True)[:limit]
 
     async def count_user_messages_since(self, user_id, since):
         return sum(

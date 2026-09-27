@@ -15,3 +15,8 @@ DOCS
 .env.*
 !.env.example
 *.pdf
+
+# Frontend: installed and built inside the image, never copied from the host
+frontend/node_modules
+frontend/dist
+.tmp

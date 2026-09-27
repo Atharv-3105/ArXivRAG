@@ -104,10 +104,17 @@ class InMemoryPaperContent:
     def __init__(self) -> None:
         self.papers: dict[str, dict] = {}
 
-    def add(self, paper_id: str, title: str, sections: list[dict], equations=None) -> None:
+    def add(
+        self,
+        paper_id: str,
+        title: str,
+        sections: list[dict],
+        equations=None,
+        published: str = "2024-01-01",
+    ) -> None:
         self.papers[paper_id] = {
             "title": title,
-            "published": "2024-01-01",
+            "published": published,
             "sections": sections,
             "equations": equations or [],
         }

@@ -19,8 +19,13 @@ DELIMITER = "<<<META>>>"
 
 
 def _first_sentence(body: str, limit: int = 240) -> str:
-    sentence = re.split(r"(?<=[.!])\s", body.strip(), maxsplit=1)[0]
-    return sentence.replace("?", ".")[:limit]
+    sentence = re.split(r"(?<=[.!])\s", body.strip(), maxsplit=1)[0].replace("?", ".")
+    if len(sentence) <= limit:
+        return sentence
+    cut = sentence[:limit].rsplit(" ", 1)[0]
+    if len(re.findall(r"(?<!\\)\$", cut)) % 2:  # never end inside a $...$ formula
+        cut = cut[: cut.rfind("$")].rstrip()
+    return cut + " ..."
 
 
 def _field(prompt: str, name: str) -> str:

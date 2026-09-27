@@ -50,6 +50,8 @@ class GraphStore(Protocol):
 
     async def missing(self, limit: int) -> list[dict]: ...
 
+    async def map(self, limit: int) -> dict: ...
+
 
 # ================================================================== Postgres
 
@@ -171,6 +173,28 @@ _MISSING = text(
     GROUP BY c.cited_base_id
     ORDER BY cited_by DESC, c.cited_base_id
     LIMIT :limit
+    """
+)
+
+
+# The map: the most influential papers, and the citation edges among them.
+_MAP_NODES = text(
+    """
+    SELECT p.arxiv_id, p.title, p.published_date, p.categories->>0 AS category,
+           COALESCE(i.pagerank, 0) AS pagerank, COALESCE(i.in_degree, 0) AS in_degree
+    FROM papers p LEFT JOIN paper_influence i ON i.arxiv_id = p.arxiv_id
+    WHERE p.index_status = 'indexed'
+    ORDER BY pagerank DESC, p.published_date DESC
+    LIMIT :limit
+    """
+)
+_MAP_EDGES = text(
+    """
+    SELECT c.citing_id AS source, p.arxiv_id AS target,
+           (SELECT array_agg(DISTINCT x.function) FROM citation_contexts x
+             WHERE x.citing_id = c.citing_id AND x.cited_base_id = c.cited_base_id) AS functions
+    FROM paper_citations c JOIN papers p ON p.base_id = c.cited_base_id
+    WHERE c.citing_id = ANY(:ids) AND p.arxiv_id = ANY(:ids) AND p.arxiv_id <> c.citing_id
     """
 )
 
@@ -350,6 +374,29 @@ class PgGraphStore:
                 for r in rows
             ]
 
+    async def map(self, limit):
+        async with self._tx() as s:
+            nodes = [
+                {
+                    "id": r.arxiv_id,
+                    "title": r.title,
+                    "published": _iso(r.published_date),
+                    "category": r.category,
+                    "pagerank": r.pagerank,
+                    "in_degree": r.in_degree,
+                }
+                for r in await s.execute(_MAP_NODES, {"limit": limit})
+            ]
+            ids = [n["id"] for n in nodes]
+            edges = []
+            if ids:
+                rows = await s.execute(_MAP_EDGES, {"ids": ids})
+                edges = [
+                    {"source": r.source, "target": r.target, "function": _strongest(r.functions)}
+                    for r in rows
+                ]
+        return {"nodes": nodes, "edges": edges}
+
     async def missing(self, limit):
         async with self._tx() as s:
             rows = await s.execute(_MISSING, {"limit": limit})
@@ -368,8 +415,18 @@ class InMemoryGraphStore:
         self.contexts: list[dict] = []
         self.ranks: dict[str, dict] = {}
 
-    def add_paper(self, arxiv_id: str, title: str = "", published: str = "2024-01-01") -> None:
-        self.papers[arxiv_id] = {"title": title or f"Title {arxiv_id}", "published": published}
+    def add_paper(
+        self,
+        arxiv_id: str,
+        title: str = "",
+        published: str = "2024-01-01",
+        category: str = "cs.LG",
+    ) -> None:
+        self.papers[arxiv_id] = {
+            "title": title or f"Title {arxiv_id}",
+            "published": published,
+            "category": category,
+        }
 
     def cite(self, citing: str, cited: str, function: str = "neutral", sentence: str = "") -> None:
         self.edges.add((citing, base_id(cited)))
@@ -464,6 +521,32 @@ class InMemoryGraphStore:
     async def top_influential(self, limit):
         rows = sorted(self.ranks.values(), key=lambda r: -r["pagerank"])[:limit]
         return [{**r, "title": self.papers[r["arxiv_id"]]["title"]} for r in rows]
+
+    async def map(self, limit):
+        ranked = sorted(
+            self.papers,
+            key=lambda p: -self.ranks.get(p, {}).get("pagerank", 0.0),
+        )[:limit]
+        nodes = [
+            {
+                "id": p,
+                "title": self.papers[p]["title"],
+                "published": self.papers[p]["published"],
+                "category": self.papers[p].get("category"),
+                "pagerank": self.ranks.get(p, {}).get("pagerank", 0.0),
+                "in_degree": self.ranks.get(p, {}).get("in_degree", 0),
+            }
+            for p in ranked
+        ]
+        functions: dict[tuple[str, str], list[str]] = {}
+        for c in self.contexts:
+            functions.setdefault((c["citing_id"], c["cited_base_id"]), []).append(c["function"])
+        edges = [
+            {"source": c, "target": t, "function": _strongest(functions.get((c, b)))}
+            for c, b in sorted(self.edges)
+            if c in ranked and (t := self._resolve(b)) in ranked and t != c
+        ]
+        return {"nodes": nodes, "edges": edges}
 
     async def missing(self, limit):
         counts: dict[str, int] = {}

@@ -70,6 +70,8 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
 [tool.ruff.lint.per-file-ignores]
 # Fixtures embed HTML/LaTeX strings that are clearer unwrapped; fakes may do blocking file I/O.
 "tests/**" = ["E501", "ASYNC230"]
+# The demo corpus: paraphrased abstracts kept on one line each, like a data file.
+"src/api/demo.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"

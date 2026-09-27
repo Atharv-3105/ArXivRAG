@@ -1,5 +1,14 @@
 # syntax=docker/dockerfile:1
 
+# ---- web: build the frontend (static files only; Node never ships in the image) ----
+FROM node:24-bookworm-slim AS web
+WORKDIR /web
+COPY frontend/package.json frontend/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
+
+
 # ---- builder: resolve + install dependencies from the lockfile (reproducible) ----
 # Pinned to Debian 12 (OpenSSL 3.0) ON PURPOSE. The unpinned python:3.12-slim moved to Debian 13
 # (OpenSSL 3.5), whose default TLS handshake (post-quantum key share) gets HTTP 406 from
@@ -38,6 +47,7 @@ RUN groupadd --system --gid 10001 app \
 WORKDIR /app
 
 COPY --from=builder /opt/venv /opt/venv
+COPY --from=web --chown=app:app /web/dist ./frontend/dist
 COPY --chown=app:app src ./src
 
 USER app

@@ -5,7 +5,7 @@ The plan in `Docs/arxiv_plan.md` is the target. This file describes **what exist
 ## Layers
 
 ```
-Clients          Web UI · CLI                                          (Phase 2+)
+Clients          Web app: React SPA (Margin design + Atlas map), served by the API [ADR 0014]
                      │ HTTPS, SSE
 API              FastAPI · JWT auth · per-user limits · /chat, /chat/stream (SSE), /me, /feedback
                  /metrics (Prometheus) · /health/live · /health/ready                    [ADR 0012]
@@ -69,6 +69,6 @@ Ops              CI gate (tests + offline eval + secret scan) · GHCR sha images
 ## Documents
 
 - Phases: [phase 1 — ingestion](phases/phase-1-ingestion.md) · [phase 2 — agentic loop](phases/phase-2-agentic-loop.md) · [phase 3 — personalization](phases/phase-3-personalization-memory.md) · [phase 4 — graph retrieval](phases/phase-4-graph-retrieval.md) · [phase 5 — agents & pedagogy](phases/phase-5-agents-pedagogy.md) · [phase 6 — eval & ops](phases/phase-6-eval-ops.md)
-- ADRs: [0001](adr/0001-html-first-ingestion.md) · [0002](adr/0002-postgres-source-of-truth.md) · [0003](adr/0003-citation-graph-in-postgres.md) · [0004](adr/0004-llm-router.md) · [0005](adr/0005-hybrid-retrieval-rrf.md) · [0006](adr/0006-single-instance-in-process-state.md) · [0007](adr/0007-conversation-state-in-postgres.md) · [0008](adr/0008-learner-model-and-memory-pipeline.md) · [0009](adr/0009-graph-enhanced-retrieval.md) · [0010](adr/0010-specialist-agents.md) · [0011](adr/0011-guardrail.md) · [0012](adr/0012-evaluation-and-observability.md) · [0013](adr/0013-deployment-and-operations.md)
-- [SLOs](slo.md) · [Deployment](deployment.md) · [Runbooks](runbooks/README.md) · [Evaluation](eval/README.md) · [API](api/README.md)
+- ADRs: [0001](adr/0001-html-first-ingestion.md) · [0002](adr/0002-postgres-source-of-truth.md) · [0003](adr/0003-citation-graph-in-postgres.md) · [0004](adr/0004-llm-router.md) · [0005](adr/0005-hybrid-retrieval-rrf.md) · [0006](adr/0006-single-instance-in-process-state.md) · [0007](adr/0007-conversation-state-in-postgres.md) · [0008](adr/0008-learner-model-and-memory-pipeline.md) · [0009](adr/0009-graph-enhanced-retrieval.md) · [0010](adr/0010-specialist-agents.md) · [0011](adr/0011-guardrail.md) · [0012](adr/0012-evaluation-and-observability.md) · [0013](adr/0013-deployment-and-operations.md) · [0014](adr/0014-web-frontend.md)
+- [Web app](frontend.md) · [SLOs](slo.md) · [Deployment](deployment.md) · [Runbooks](runbooks/README.md) · [Evaluation](eval/README.md) · [API](api/README.md)
 - [Interview questions](interview_questions.md)

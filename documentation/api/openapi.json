@@ -714,6 +714,102 @@
         }
       }
     },
+    "/api/v1/me/papers": {
+      "get": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Studied Papers",
+        "description": "Papers your answers have cited, most recent first (the map marks them as studied).",
+        "operationId": "studied_papers_api_v1_me_papers_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversation_id}/tutor": {
+      "get": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Conversation Tutor",
+        "description": "The tutoring session of a conversation (pending question, step, reading position).",
+        "operationId": "conversation_tutor_api_v1_conversations__conversation_id__tutor_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Conversation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/conversations/{conversation_id}": {
       "get": {
         "tags": [
@@ -778,6 +874,50 @@
               "maximum": 100,
               "minimum": 1,
               "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/papers/map": {
+      "get": {
+        "tags": [
+          "Papers"
+        ],
+        "summary": "Paper Map",
+        "description": "The most influential papers and the citation edges among them, for the map view.",
+        "operationId": "paper_map_api_v1_papers_map_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 300,
+              "minimum": 5,
+              "default": 80,
               "title": "Limit"
             }
           }

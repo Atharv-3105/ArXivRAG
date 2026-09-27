@@ -9,6 +9,7 @@ import structlog
 from fastapi import APIRouter, Depends, Query, Response, status
 from pydantic import BaseModel, Field
 
+from src.agents import tutor as tutor_mod
 from src.api.deps import current_user, services
 from src.api.services import Services
 from src.auth.security import verify_password
@@ -204,6 +205,27 @@ async def list_conversations(
     svc: Services = Depends(services),
 ):
     return await svc.conversations.list_conversations(user.id, limit)
+
+
+@router.get("/me/papers")
+async def studied_papers(
+    limit: int = Query(default=200, ge=1, le=500),
+    user: UserRecord = Depends(current_user),
+    svc: Services = Depends(services),
+):
+    """Papers your answers have cited, most recent first (the map marks them as studied)."""
+    return await svc.conversations.cited_papers(user.id, limit)
+
+
+@router.get("/conversations/{conversation_id}/tutor")
+async def conversation_tutor(
+    conversation_id: UUID,
+    user: UserRecord = Depends(current_user),
+    svc: Services = Depends(services),
+):
+    """The tutoring session of a conversation (pending question, step, reading position)."""
+    state = await svc.conversations.get_state(user.id, str(conversation_id))
+    return {"tutor": tutor_mod.public_view(state)}
 
 
 @router.get("/conversations/{conversation_id}")

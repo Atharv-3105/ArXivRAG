@@ -133,6 +133,36 @@ def is_known(concept: str) -> bool:
     return concept in VOCABULARY
 
 
+# How a concept is written for people, where the first alias's casing is not it.
+DISPLAY = {
+    "lora": "LoRA",
+    "qlora": "QLoRA",
+    "rope": "RoPE",
+    "rlhf": "RLHF",
+    "dpo": "DPO",
+    "ppo": "PPO",
+    "peft": "Parameter-efficient fine-tuning",
+    "gan": "GANs",
+    "vae": "Variational autoencoders",
+    "cnn": "Convolutional networks",
+    "rnn": "Recurrent networks",
+    "bm25": "BM25",
+    "clip": "CLIP",
+    "kv_cache": "KV cache",
+    "flash_attention": "FlashAttention",
+    "adam": "Adam",
+    "layer_norm": "Layer normalization",
+    "batch_norm": "Batch normalization",
+    "language_model": "Language models",
+    "multimodal": "Multimodal models",
+    "retrieval_augmented_generation": "Retrieval-augmented generation",
+    "kl_divergence": "KL divergence",
+}
+
+
 def label(concept: str) -> str:
-    """Human-readable name for UIs: the concept's first alias."""
-    return VOCABULARY.get(concept, [concept])[0]
+    """Human-readable name for UIs ("lora" -> "LoRA", "self_attention" -> "Self-attention")."""
+    if concept in DISPLAY:
+        return DISPLAY[concept]
+    first = VOCABULARY.get(concept, [concept.replace("_", " ")])[0]
+    return first[:1].upper() + first[1:]

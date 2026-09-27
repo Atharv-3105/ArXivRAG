@@ -383,4 +383,4 @@ def test_advisor_reply_cites_and_mentions_due_reviews():
     ranked = advisor.rank_candidates([_cand("p", 0)], set(), set(), 1)
     text = advisor.render(ranked, due=["lora"], weak=["rlhf"])
     assert "**Title p** (p)" in text and "[1]" in text
-    assert "due for review: lora" in text and "quiz me" in text
+    assert "due for review: LoRA" in text and "quiz me" in text

@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     PORT: int = Field(default=8000)
     CORS_ORIGINS: list[str] = Field(default=["http://localhost:3000", "http://localhost:8080"])
     PUBLIC_BASE_URL: str = Field(default="http://localhost:8000")
+    FRONTEND_DIST: str = Field(
+        default="frontend/dist", description="Built web app to serve at / (relative to the repo)"
+    )
 
     # Storage
     DATABASE_URL: str | None = Field(default=None, description="PostgreSQL connection string")
