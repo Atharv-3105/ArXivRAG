@@ -12,6 +12,7 @@ import structlog
 
 from src.agents.graph import ChatDeps, Retriever, build_graph
 from src.api.limits import SlidingWindowLimiter
+from src.auth.seed import ensure_admin
 from src.auth.users import PgUserStore, UserStore
 from src.core.config import settings
 from src.core.exceptions import IndexError
@@ -81,8 +82,10 @@ async def create_services() -> Services:
     A *misconfigured* dependency (wrong collection layout) does stop it: that never heals."""
     from src.storage.database import init_db_schema
 
+    users = PgUserStore()
     try:
         await init_db_schema()
+        await ensure_admin(users)
     except Exception as e:
         logger.error("Database unavailable at startup; chat history is best effort", error=str(e))
 
@@ -110,7 +113,7 @@ async def create_services() -> Services:
         llm=build_router(observer=observe_llm),
         retriever=store,
         conversations=PgConversationStore(),
-        users=PgUserStore(),
+        users=users,
         profiles=PgProfileStore(),
         graph_store=PgGraphStore(),
         content=PgPaperContent(),

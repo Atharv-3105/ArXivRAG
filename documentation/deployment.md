@@ -24,6 +24,7 @@
 5. Set `render.yaml`'s image to your `ghcr.io/<owner>/<repo>:<sha>` and create the service from the blueprint.
 6. Seed the corpus: run the ingestion workflow manually, or `python -m src.eval.seed` locally against the cloud URLs.
 7. Check it: `curl https://<host>/health/ready`, then a chat through the API.
+   Owner account: set `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` as secrets. Every start creates the account as an admin, or promotes an existing account to admin. It never resets an existing password, so rotate the password in the app. Admins are exempt from the rate limit and the daily quota. There is deliberately no passwordless or "debug login" path: that would be a backdoor in every deployed copy of the image.
 8. Protect `main` and add a GitHub *environment* `production` with required reviewers, for manual approval of deploys.
 
 ## Deploy / rollback

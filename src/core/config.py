@@ -155,6 +155,12 @@ class Settings(BaseSettings):
     BCRYPT_ROUNDS: int = Field(default=12, ge=4, le=16, description="Password hash cost (2^n)")
     ALLOW_REGISTRATION: bool = True
     ADMIN_EMAILS: list[str] = Field(default_factory=list)
+    SEED_ADMIN_EMAIL: str | None = Field(
+        default=None, description="Owner account created (or promoted) as admin at startup"
+    )
+    SEED_ADMIN_PASSWORD: SecretStr | None = Field(
+        default=None, description="Its password on first creation; never changed afterwards"
+    )
 
     # Free-tier limits (protect the LLM budget and the free hosting quotas)
     RATE_LIMIT_PER_MINUTE: int = Field(default=20, description="Requests per user per minute")

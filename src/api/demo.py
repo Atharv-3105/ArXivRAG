@@ -333,6 +333,7 @@ class DemoRetriever:
 
 async def build_services():
     from src.api.services import Services
+    from src.auth.seed import ensure_admin
     from src.auth.users import InMemoryUserStore
     from src.core.metrics import observe_llm
     from src.graph.influence import refresh_influence
@@ -359,11 +360,13 @@ async def build_services():
     for citing, cited, function, sentence in CITATIONS:
         graph.cite(citing, cited, function, sentence)
     await refresh_influence(graph)
+    users = InMemoryUserStore()
+    await ensure_admin(users)  # SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD from .env
     return Services(
         llm=build_router(observer=observe_llm),
         retriever=DemoRetriever(),
         conversations=InMemoryConversationStore(),
-        users=InMemoryUserStore(),
+        users=users,
         profiles=InMemoryProfileStore(),
         graph_store=graph,
         content=content,

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from src.core.exceptions import ConflictError
@@ -31,6 +31,8 @@ class UserStore(Protocol):
     async def by_id(self, user_id: int) -> UserRecord | None: ...
 
     async def delete(self, user_id: int) -> None: ...
+
+    async def set_admin(self, user_id: int, is_admin: bool) -> None: ...
 
 
 def _record(row: User) -> UserRecord:
@@ -78,6 +80,11 @@ class PgUserStore:
             await session.execute(delete(User).where(User.id == user_id))
             await session.commit()
 
+    async def set_admin(self, user_id, is_admin) -> None:
+        async with get_async_session() as session:
+            await session.execute(update(User).where(User.id == user_id).values(is_admin=is_admin))
+            await session.commit()
+
 
 class InMemoryUserStore:
     def __init__(self) -> None:
@@ -107,3 +114,7 @@ class InMemoryUserStore:
 
     async def delete(self, user_id) -> None:
         self.users.pop(user_id, None)
+
+    async def set_admin(self, user_id, is_admin) -> None:
+        if user_id in self.users:
+            self.users[user_id].is_admin = is_admin
