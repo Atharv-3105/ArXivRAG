@@ -70,7 +70,7 @@ Then continue the same `conversation_id` with: an answer, `hint`, `I don't under
 | Adjusts math depth | Done: the reader block (math depth, level) plus pitch from mastery, stepped down by re-explanations. |
 | Cites sections | Done: the same grounding as every specialist, with section deep links. |
 | Tracks confidence | Done: every graded answer is a quiz event feeding mastery and SM-2. Level and hints are tracked per session. |
-| Jinja2 templates, versioning, A/B | Done: A/B logs `prompt_version`. LangSmith receives it as a tag when tracing is on. |
+| Jinja2 templates, versioning, A/B | Done: `prompt_version` is stored on every message and logged. The plan's "A/B via LangSmith" is **not** wired: LangSmith (opt-in) sees node spans only. Comparing variants is done from the messages table (Phase 6 eval). |
 | "I don't understand" → re-explain lower | Done: free text or the explicit `dont_understand` action. |
 | Specialist agents from plan §4 | Done: Tutor, Critic, Synthesizer and Advisor, plus General. |
 | Live-model behaviour | **Not measured yet.** Tests use the contract-following mock. Real models' `trailer_parsed` and `one_question` rates are a Phase 6 measurement. |
