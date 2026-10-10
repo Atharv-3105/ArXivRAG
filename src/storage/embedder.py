@@ -1,8 +1,9 @@
 """Dense + sparse text embeddings via fastembed (ONNX Runtime).
 
-fastembed instead of sentence-transformers: the same bge-small weights exported to ONNX, without
-PyTorch, by far the largest dependency, which is what lets the API fit a free host. The BM25
-sparse encoder for hybrid search comes from the same library.
+fastembed instead of the sentence-transformers package: the same all-MiniLM-L6-v2 weights
+exported to ONNX, without PyTorch, by far the largest dependency, which is what lets the API fit a
+free host. The BM25 sparse encoder for hybrid search comes from the same library, and it needs no
+neural model at all (see ADR 0015 for the degraded mode when the dense model is unavailable).
 """
 
 from dataclasses import dataclass
@@ -70,8 +71,8 @@ class EmbeddingService:
         return self._normalise(vectors)
 
     def encode_query(self, query: str) -> np.ndarray:
-        """Short query -> dense vector. bge recommends an instruction prefix for short queries
-        against long passages; it is config (EMBEDDING_QUERY_PREFIX) so the eval can measure it."""
+        """Short query -> dense vector. Some models (bge) want an instruction prefix on queries
+        only; it is config (EMBEDDING_QUERY_PREFIX), empty for MiniLM, so eval can measure it."""
         text = f"{settings.EMBEDDING_QUERY_PREFIX}{query}"
         return self._normalise(np.array(list(self.model.embed([text]))))[0]
 

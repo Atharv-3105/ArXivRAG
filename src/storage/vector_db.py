@@ -1,7 +1,8 @@
 """Qdrant: hybrid (dense + BM25) index over chunks. A derived store - see ADR 0002.
 
 Each point has two named vectors:
-  "dense" - bge-small, cosine: matches meaning ("attention cost" ~ "quadratic complexity")
+  "dense" - all-MiniLM-L6-v2 (384-d), cosine: matches meaning
+            ("attention cost" ~ "quadratic complexity")
   "bm25"  - sparse term weights, IDF applied by Qdrant: matches exact tokens (model names,
             symbols, acronyms such as "LoRA" or "KV-cache") that dense models blur
 and the two ranked lists are fused server-side with Reciprocal Rank Fusion (ADR 0005).
@@ -152,25 +153,37 @@ class VectorStore:
         `mode` = "dense" | "sparse" runs one branch alone: used by the retrieval ablation
         (src/eval/live.py) to measure what each branch and the fusion contribute."""
         top_k = top_k or settings.RETRIEVAL_TOP_K
-        dense = await asyncio.to_thread(self.embedder.encode_query, query)
+        dense = None
+        try:
+            dense = await asyncio.to_thread(self.embedder.encode_query, query)
+        except Exception as e:
+            if mode == "dense":
+                raise RetrievalError(
+                    f"Dense model unavailable: {e}", code="EMBEDDING_UNAVAILABLE"
+                ) from e
+            # The dense model failed to load or run (download blocked, out of memory). BM25 needs
+            # no neural model, so degrade to lexical retrieval instead of failing the turn.
+            logger.warning("Dense model unavailable; serving BM25-only results", error=str(e))
+            mode = "sparse"
         sparse = await asyncio.to_thread(self.embedder.encode_sparse_query, query)
         flt = None
         if paper_ids:
             flt = models.Filter(
                 must=[models.FieldCondition(key="paper_id", match=models.MatchAny(any=paper_ids))]
             )
-        prefetch = [
-            models.Prefetch(
+        branches: dict[str, models.Prefetch] = {}
+        if dense is not None:
+            branches["dense"] = models.Prefetch(
                 query=dense.tolist(), using=DENSE, limit=settings.RETRIEVAL_PREFETCH, filter=flt
-            ),
-            models.Prefetch(
-                query=models.SparseVector(indices=sparse.indices, values=sparse.values),
-                using=SPARSE,
-                limit=settings.RETRIEVAL_PREFETCH,
-                filter=flt,
-            ),
-        ]
-        single = {"dense": prefetch[0], "sparse": prefetch[1]}.get(mode)
+            )
+        branches["sparse"] = models.Prefetch(
+            query=models.SparseVector(indices=sparse.indices, values=sparse.values),
+            using=SPARSE,
+            limit=settings.RETRIEVAL_PREFETCH,
+            filter=flt,
+        )
+        prefetch = list(branches.values())
+        single = branches.get(mode)  # "hybrid" is not a branch: it fuses all of them
         try:
             if single is not None:
                 response = await self.client.query_points(

@@ -35,7 +35,7 @@
 
 ## Cold starts
 
-Free web hosts sleep idle services. The first request afterwards pays the container start plus loading the ONNX models (bge-small and BM25, cached in `MODEL_CACHE_DIR`), which breaches the latency SLO for that request. The options:
+Free web hosts sleep idle services. The first request afterwards pays the container start plus loading the ONNX models (all-MiniLM-L6-v2 and BM25, cached in `MODEL_CACHE_DIR`), which breaches the latency SLO for that request. The options:
 - accept it and exclude cold starts from the SLO (documented in `slo.md`);
 - an external keep-warm ping, only if the host's terms allow it;
 - a paid instance, when there are real users.

@@ -280,15 +280,44 @@ async def test_search_failure_is_a_retrieval_error(store):
     assert exc.value.code == "VECTOR_SEARCH_ERROR"
 
 
-def test_query_embedding_uses_the_retrieval_instruction(monkeypatch):
+def _embedding_service_with_fake_model():
     svc = EmbeddingService()
     fake = MagicMock()
     fake.embed.side_effect = lambda texts, **_: [np.ones(DIM)] * len(texts)
     svc._model = fake
+    return svc, fake
+
+
+def test_query_embedding_sends_the_configured_instruction_prefix(monkeypatch):
+    monkeypatch.setattr(vector_db.settings, "EMBEDDING_QUERY_PREFIX", "Represent this sentence: ")
+    svc, fake = _embedding_service_with_fake_model()
     vec = svc.encode_query("attention")
-    sent = fake.embed.call_args.args[0][0]
-    assert sent.endswith("attention") and sent.startswith("Represent this sentence")
+    assert fake.embed.call_args.args[0][0] == "Represent this sentence: attention"
     assert abs(np.linalg.norm(vec) - 1.0) < 1e-6  # normalised
+
+
+def test_minilm_default_sends_the_query_unchanged():
+    """MiniLM is symmetric: an instruction prefix would only add noise to the query."""
+    svc, fake = _embedding_service_with_fake_model()
+    svc.encode_query("attention")
+    assert fake.embed.call_args.args[0][0] == "attention"
+
+
+async def test_hybrid_search_degrades_to_bm25_when_the_dense_model_fails(store):
+    vs, client, embedder = store
+    embedder.encode_query.side_effect = RuntimeError("model download blocked")
+    await vs.search("LoRA rank")
+    kwargs = client.query_points.await_args.kwargs
+    assert kwargs["using"] == vector_db.SPARSE  # one lexical branch, no dense, no fusion
+    assert "prefetch" not in kwargs
+
+
+async def test_dense_only_mode_does_not_hide_a_model_failure(store):
+    vs, _, embedder = store
+    embedder.encode_query.side_effect = RuntimeError("model download blocked")
+    with pytest.raises(RetrievalError) as exc:
+        await vs.search("q", mode="dense")
+    assert exc.value.code == "EMBEDDING_UNAVAILABLE"
 
 
 def test_sparse_encoder_returns_empty_list_without_loading_model():

@@ -37,16 +37,20 @@ class Settings(BaseSettings):
     DATABASE_URL: str | None = Field(default=None, description="PostgreSQL connection string")
     QDRANT_URL: str = Field(default="http://localhost:6333", description="Qdrant API endpoint")
     QDRANT_API_KEY: str | None = Field(default=None, description="Only for secured/cloud Qdrant")
-    QDRANT_COLLECTION: str = Field(default="arxiv_papers_v2")
+    QDRANT_COLLECTION: str = Field(
+        default="arxiv_papers_minilm",
+        description="One collection per embedding model: a model swap never mixes vector spaces",
+    )
     DEPENDENCY_TIMEOUT_SECONDS: float = Field(default=3.0, description="Readiness probe timeout")
 
     # Embeddings (fastembed / ONNX: no PyTorch, fits free-tier memory)
-    EMBEDDING_MODEL: str = Field(default="BAAI/bge-small-en-v1.5")
+    EMBEDDING_MODEL: str = Field(default="sentence-transformers/all-MiniLM-L6-v2")
     EMBEDDING_DIM: int = Field(default=384, description="Must match EMBEDDING_MODEL's output size")
     EMBEDDING_BATCH_SIZE: int = Field(default=32)
     EMBEDDING_QUERY_PREFIX: str = Field(
-        default="Represent this sentence for searching relevant passages: ",
-        description="Prepended to queries only (bge's retrieval instruction); '' disables",
+        default="",
+        description="Prepended to queries only. MiniLM is symmetric, so none; bge needs its "
+        "'Represent this sentence for searching relevant passages: ' instruction",
     )
     SPARSE_MODEL: str = Field(default="Qdrant/bm25", description="Sparse model for hybrid search")
     MODEL_CACHE_DIR: str = Field(
@@ -70,8 +74,12 @@ class Settings(BaseSettings):
     # Parsing / chunking
     PARSE_MIN_WORDS: int = Field(default=800)
     PARSE_MIN_SECTIONS: int = Field(default=2)
-    CHUNK_SIZE: int = Field(default=1000, description="Characters per chunk")
-    CHUNK_OVERLAP: int = Field(default=200, description="Characters shared between chunks")
+    CHUNK_SIZE: int = Field(
+        default=800,
+        description="Characters per chunk. MiniLM reads 256 word-pieces and silently drops the "
+        "rest; 800 characters of LaTeX-heavy prose stays inside that",
+    )
+    CHUNK_OVERLAP: int = Field(default=150, description="Characters shared between chunks")
 
     # Retrieval
     RETRIEVAL_TOP_K: int = Field(default=6, ge=1, le=30)

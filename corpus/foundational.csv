@@ -1,0 +1,237 @@
+arxiv_id,topic,title_match
+1706.03762,transformers,attention is all you need
+1810.04805,nlp-pretraining,bert pre-training of deep bidirectional
+1907.11692,nlp-pretraining,roberta
+1909.11942,nlp-pretraining,albert
+1910.10683,nlp-pretraining,exploring the limits of transfer learning
+1910.13461,nlp-pretraining,bart denoising sequence-to-sequence
+1906.08237,nlp-pretraining,xlnet
+2003.10555,nlp-pretraining,electra
+2006.03654,nlp-pretraining,deberta
+1907.10529,nlp-pretraining,spanbert
+1911.02116,nlp-pretraining,unsupervised cross-lingual representation learning at scale
+2010.11934,nlp-pretraining,mt5
+1802.05365,nlp-pretraining,deep contextualized word representations
+1301.3781,foundations,efficient estimation of word representations
+1310.4546,foundations,distributed representations of words and phrases
+1409.0473,foundations,neural machine translation by jointly learning to align and translate
+1508.04025,foundations,effective approaches to attention-based neural machine translation
+1409.3215,foundations,sequence to sequence learning with neural networks
+1406.1078,foundations,learning phrase representations using rnn encoder-decoder
+1308.0850,foundations,generating sequences with recurrent neural networks
+1508.07909,foundations,neural machine translation of rare words with subword units
+1808.06226,foundations,sentencepiece
+1412.6980,foundations,adam a method for stochastic optimization
+1711.05101,foundations,decoupled weight decay regularization
+1207.0580,foundations,improving neural networks by preventing co-adaptation
+1502.03167,foundations,batch normalization
+1607.06450,foundations,layer normalization
+1910.07467,foundations,root mean square layer normalization
+2002.04745,foundations,on layer normalization in the transformer architecture
+2002.05202,foundations,glu variants improve transformer
+1606.08415,foundations,gaussian error linear units
+1710.05941,foundations,searching for activation functions
+1502.01852,foundations,delving deep into rectifiers
+1512.03385,vision,deep residual learning for image recognition
+1503.02531,efficiency,distilling the knowledge in a neural network
+1910.01108,efficiency,distilbert
+1901.02860,transformers,transformer-xl
+2004.05150,transformers,longformer
+2007.14062,transformers,big bird
+2001.04451,transformers,reformer
+2006.04768,transformers,linformer
+2009.14794,transformers,rethinking attention with performers
+1904.10509,transformers,generating long sequences with sparse transformers
+2104.09864,transformers,roformer
+2108.12409,transformers,train short test long
+2306.15595,transformers,extending context window of large language models via positional interpolation
+2309.00071,transformers,yarn
+1911.02150,transformers,fast transformer decoding
+2305.13245,transformers,gqa
+2205.14135,efficiency,flashattention
+2307.08691,efficiency,flashattention-2
+1701.06538,efficiency,outrageously large neural networks
+2006.16668,efficiency,gshard
+2101.03961,efficiency,switch transformers
+2112.06905,efficiency,glam
+2401.04088,llms,mixtral of experts
+2405.04434,llms,deepseek-v2
+2312.00752,transformers,mamba
+2111.00396,transformers,efficiently modeling long sequences with structured state spaces
+2305.13048,transformers,rwkv
+2307.08621,transformers,retentive network
+2005.14165,scaling-llms,language models are few-shot learners
+2001.08361,scaling-llms,scaling laws for neural language models
+2203.15556,scaling-llms,training compute-optimal large language models
+2112.11446,scaling-llms,scaling language models methods analysis
+2204.02311,scaling-llms,palm scaling language modeling with pathways
+2205.01068,scaling-llms,opt open pre-trained transformer language models
+2211.05100,scaling-llms,bloom
+2210.02414,scaling-llms,glm-130b
+2302.13971,scaling-llms,llama open and efficient foundation language models
+2307.09288,scaling-llms,llama 2
+2407.21783,scaling-llms,the llama 3 herd of models
+2310.06825,scaling-llms,mistral 7b
+2309.16609,scaling-llms,qwen technical report
+2412.19437,scaling-llms,deepseek-v3
+2501.12948,scaling-llms,deepseek-r1
+2402.03300,scaling-llms,deepseekmath
+2312.11805,scaling-llms,gemini a family of highly capable multimodal models
+2403.05530,scaling-llms,gemini 1.5
+2303.08774,scaling-llms,gpt-4 technical report
+2303.12712,scaling-llms,sparks of artificial general intelligence
+2108.07258,scaling-llms,opportunities and risks of foundation models
+2206.07682,scaling-llms,emergent abilities of large language models
+2306.11644,scaling-llms,textbooks are all you need
+2203.02155,alignment,training language models to follow instructions with human feedback
+2212.08073,alignment,constitutional ai
+2305.18290,alignment,direct preference optimization
+1707.06347,alignment,proximal policy optimization algorithms
+1706.03741,alignment,deep reinforcement learning from human preferences
+2009.01325,alignment,learning to summarize from human feedback
+2204.05862,alignment,training a helpful and harmless assistant
+2307.15217,alignment,open problems and fundamental limitations of reinforcement learning from human feedback
+2305.11206,alignment,lima less is more for alignment
+2212.10560,alignment,self-instruct
+2109.01652,alignment,finetuned language models are zero-shot learners
+2210.11416,alignment,scaling instruction-finetuned language models
+2110.08207,alignment,multitask prompted training enables zero-shot task generalization
+2306.02707,alignment,orca
+2106.09685,efficiency,lora low-rank adaptation of large language models
+2305.14314,efficiency,qlora
+2101.00190,efficiency,prefix-tuning
+2104.08691,efficiency,the power of scale for parameter-efficient prompt tuning
+1902.00751,efficiency,parameter-efficient transfer learning for nlp
+2208.07339,efficiency,llm.int8
+2210.17323,efficiency,gptq
+2306.00978,efficiency,awq
+2211.17192,efficiency,fast inference from transformers via speculative decoding
+2309.06180,efficiency,efficient memory management for large language model serving with pagedattention
+1710.03740,efficiency,mixed precision training
+1910.02054,efficiency,zero memory optimizations toward training trillion parameter models
+1909.08053,efficiency,megatron-lm
+2104.04473,efficiency,efficient large-scale language model training on gpu clusters
+1811.06965,efficiency,gpipe
+1604.06174,efficiency,training deep nets with sublinear memory cost
+2201.11903,reasoning,chain-of-thought prompting elicits reasoning
+2203.11171,reasoning,self-consistency improves chain of thought reasoning
+2205.11916,reasoning,large language models are zero-shot reasoners
+2305.10601,reasoning,tree of thoughts
+2110.14168,reasoning,training verifiers to solve math word problems
+2103.03874,reasoning,measuring mathematical problem solving with the math dataset
+2107.03374,reasoning,evaluating large language models trained on code
+2108.07732,reasoning,program synthesis with large language models
+2005.11401,retrieval,retrieval-augmented generation for knowledge-intensive nlp tasks
+2004.04906,retrieval,dense passage retrieval for open-domain question answering
+2002.08909,retrieval,realm retrieval-augmented language model pre-training
+2112.04426,retrieval,improving language models by retrieving from trillions of tokens
+2310.11511,retrieval,self-rag
+2312.10997,retrieval,retrieval-augmented generation for large language models a survey
+2212.10496,retrieval,precise zero-shot dense retrieval without relevance labels
+2007.01282,retrieval,leveraging passage retrieval with generative models
+2004.12832,retrieval,colbert
+1908.10084,retrieval,sentence-bert
+2212.03533,retrieval,text embeddings by weakly-supervised contrastive pre-training
+2309.07597,retrieval,c-pack
+2104.08821,retrieval,simcse
+2307.03172,retrieval,lost in the middle
+2210.03629,agents,react synergizing reasoning and acting
+2302.04761,agents,toolformer
+2303.11366,agents,reflexion
+2308.08155,agents,autogen
+2308.00352,agents,metagpt
+2304.03442,agents,generative agents
+2305.16291,agents,voyager
+2303.17580,agents,hugginggpt
+2302.07842,agents,augmented language models a survey
+2308.11432,agents,survey on large language model based autonomous agents
+2309.07864,agents,rise and potential of large language model based agents
+2307.16789,agents,toolllm
+2303.17760,agents,camel
+2112.09332,agents,webgpt
+2204.01691,agents,do as i can not as i say
+2310.03714,agents,dspy
+2009.03300,evaluation,measuring massive multitask language understanding
+2211.09110,evaluation,holistic evaluation of language models
+2206.04615,evaluation,beyond the imitation game
+2306.05685,evaluation,judging llm-as-a-judge with mt-bench
+1804.07461,evaluation,glue a multi-task benchmark
+1905.00537,evaluation,superglue
+1606.05250,evaluation,squad
+2109.07958,evaluation,truthfulqa
+2009.11462,safety,realtoxicityprompts
+2307.15043,safety,universal and transferable adversarial attacks on aligned language models
+2302.12173,safety,not what you've signed up for
+1412.6572,safety,explaining and harnessing adversarial examples
+1312.6199,safety,intriguing properties of neural networks
+1706.06083,safety,towards deep learning models resistant to adversarial attacks
+2012.07805,safety,extracting training data from large language models
+2202.07646,safety,quantifying memorization across neural language models
+2107.06499,data,deduplicating training data makes language models better
+2101.00027,data,the pile
+2402.00159,data,dolma
+2406.17557,data,fineweb
+2010.11929,vision,an image is worth 16x16 words
+2103.14030,vision,swin transformer
+2103.00020,vision,learning transferable visual models from natural language supervision
+2111.06377,vision,masked autoencoders are scalable vision learners
+2104.14294,vision,emerging properties in self-supervised vision transformers
+2304.07193,vision,dinov2
+2304.02643,vision,segment anything
+2002.05709,vision,a simple framework for contrastive learning of visual representations
+1911.05722,vision,momentum contrast for unsupervised visual representation learning
+1409.1556,vision,very deep convolutional networks for large-scale image recognition
+1409.4842,vision,going deeper with convolutions
+1905.11946,vision,efficientnet
+1608.06993,vision,densely connected convolutional networks
+2201.03545,vision,a convnet for the 2020s
+1505.04597,vision,u-net
+1506.01497,vision,faster r-cnn
+1506.02640,vision,you only look once
+2204.14198,multimodal,flamingo
+2301.12597,multimodal,blip-2
+2304.08485,multimodal,visual instruction tuning
+2212.04356,multimodal,robust speech recognition via large-scale weak supervision
+2006.11477,multimodal,wav2vec 2.0
+2102.12092,generative,zero-shot text-to-image generation
+2112.10752,generative,high-resolution image synthesis with latent diffusion models
+2006.11239,generative,denoising diffusion probabilistic models
+2010.02502,generative,denoising diffusion implicit models
+2011.13456,generative,score-based generative modeling through stochastic differential equations
+2204.06125,generative,hierarchical text-conditional image generation with clip latents
+2205.11487,generative,photorealistic text-to-image diffusion models
+2302.05543,generative,adding conditional control to text-to-image diffusion models
+1312.6114,generative,auto-encoding variational bayes
+1406.2661,generative,generative adversarial networks
+1511.06434,generative,unsupervised representation learning with deep convolutional generative adversarial networks
+1701.07875,generative,wasserstein gan
+1812.04948,generative,style-based generator architecture
+1711.00937,generative,neural discrete representation learning
+1806.07366,generative,neural ordinary differential equations
+1312.5602,reinforcement-learning,playing atari with deep reinforcement learning
+1509.02971,reinforcement-learning,continuous control with deep reinforcement learning
+1602.01783,reinforcement-learning,asynchronous methods for deep reinforcement learning
+1502.05477,reinforcement-learning,trust region policy optimization
+1801.01290,reinforcement-learning,soft actor-critic
+1506.02438,reinforcement-learning,high-dimensional continuous control using generalized advantage estimation
+1712.01815,reinforcement-learning,mastering chess and shogi by self-play
+1911.08265,reinforcement-learning,mastering atari go chess and shogi by planning with a learned model
+1609.02907,graphs,semi-supervised classification with graph convolutional networks
+1706.02216,graphs,inductive representation learning on large graphs
+1710.10903,graphs,graph attention networks
+1810.00826,graphs,how powerful are graph neural networks
+1704.01212,graphs,neural message passing for quantum chemistry
+1403.6652,graphs,deepwalk
+1607.00653,graphs,node2vec
+1503.03578,graphs,line large-scale information network embedding
+2209.11895,interpretability,in-context learning and induction heads
+2211.00593,interpretability,interpretability in the wild
+1703.04730,interpretability,understanding black-box predictions via influence functions
+1602.04938,interpretability,why should i trust you
+1705.07874,interpretability,a unified approach to interpreting model predictions
+2301.05217,interpretability,progress measures for grokking
+1611.03530,theory,understanding deep learning requires rethinking generalization
+1806.07572,theory,neural tangent kernel
+1803.03635,theory,the lottery ticket hypothesis
+1703.03400,theory,model-agnostic meta-learning
+1710.09412,theory,mixup
