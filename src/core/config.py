@@ -80,6 +80,14 @@ class Settings(BaseSettings):
         "rest; 800 characters of LaTeX-heavy prose stays inside that",
     )
     CHUNK_OVERLAP: int = Field(default=150, description="Characters shared between chunks")
+    CHUNK_MAX_TOKENS: int = Field(
+        default=200,
+        ge=32,
+        description="Embedding-model tokens per chunk, when the tokenizer is available. The model "
+        "silently drops everything past its window (256 for MiniLM), and LaTeX-heavy text packs "
+        "2-3x more tokens per character than prose, so characters alone cannot guarantee a fit",
+    )
+    CHUNK_OVERLAP_TOKENS: int = Field(default=40, ge=0, description="Tokens shared between chunks")
 
     # Retrieval
     RETRIEVAL_TOP_K: int = Field(default=6, ge=1, le=30)

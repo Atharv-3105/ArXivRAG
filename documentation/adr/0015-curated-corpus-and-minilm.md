@@ -28,7 +28,9 @@ Two decisions follow from that:
 - A **new collection name** (`arxiv_papers_minilm`): vectors from two models must never share a collection. Postgres still holds the text, so a model swap stays `reindex --all`.
 
 ### 3. Chunks resized to fit the model
-MiniLM reads 256 word-pieces and drops the rest without an error. LaTeX tokenizes poorly, so `CHUNK_SIZE` goes 1000 → 800 characters (overlap 200 → 150). Otherwise the tail of dense equations would be indexed as if it were embedded.
+MiniLM reads 256 word-pieces and drops the rest without an error. **Characters cannot guarantee a fit**: the first version of this decision cut 1000 → 800 characters, and measuring the stored chunks showed 32% still overflowed the window (LaTeX packs 2-3x more tokens per character than prose), losing 124 tokens each on average, nearly half the chunk.
+
+The chunker is therefore **token-aware** (`CHUNK_MAX_TOKENS=200`, overlap 40): it counts tokens with the embedding model's own tokenizer (exact for WordPiece, which splits on whitespace first, so a running per-word sum equals the chunk's count), closes a chunk *before* the word that would overflow, and reserves the section path's tokens (the path is embedded with every chunk). Formulas are still never split. If the tokenizer is unavailable it falls back to characters with a warning. Result on 2,735 real chunks: median 198, p90 200 tokens, 0.1% over 256 (two chunks holding single oversized formulas), down from 32%.
 
 ### 4. "The project must not die on the embedding model": BM25 fallback
 The dense model is needed at **query** time too, so a precomputed index cannot remove that dependency. What it can do is make it non-fatal. BM25 needs no neural model, so if the dense encoder fails to load or run, hybrid search degrades to BM25-only and logs a warning, instead of failing the turn. The explicit `mode="dense"` (used by the retrieval ablation) still raises, so a measurement is never silently taken on a different path.
@@ -49,5 +51,5 @@ The dense model is needed at **query** time too, so a precomputed index cannot r
 - Good: grounded answers for the questions a learner actually asks; reproducible corpus; a model failure degrades quality instead of availability.
 - Good: ids are verified, so the corpus can be audited by reading one CSV.
 - Cost: MiniLM is generally weaker than bge-small at retrieval, and its 256-token window forces smaller chunks (more chunks per paper). The hybrid BM25 branch compensates for exact terms (model names, acronyms).
-- Open: **measure it.** `src.eval.live` already ablates dense, sparse and hybrid. Run it on this corpus, on both models, and record the result here. If bge-small wins clearly, switching back is two settings and a reindex.
+- **Measured** (21 papers, 2,735 chunks, 14 hand-written questions about specific passages; bge-small embeds the same `path + content` text; small sample): MiniLM + BM25 hybrid R@1 0.86 / R@3 1.00 / MRR 0.92; MiniLM dense alone MRR 0.76; bge-small dense MRR 0.77; BM25 alone R@1 0.93 / MRR 0.95. After token-aware chunking **MiniLM and bge-small are equivalent**; an earlier 7-point gap was the truncation confound. Dense alone is the weakest branch on fact-seeking questions (names, numbers), which justifies the hybrid. Re-run on the 236-paper corpus before trusting it further.
 - Open: licences. arXiv papers carry different licences, and some do not permit redistribution. Storing text for private retrieval is fine; a public demo should show snippets with attribution and link out, and the corpus list should gain a licence column.

@@ -185,3 +185,82 @@ def test_a_formula_containing_an_escaped_dollar_stays_whole(chunker, make_sectio
     text = words(120) + " " + formula + " " + words(120, "tail")
     chunks = chunker.chunk_sections("p", [make_section(text)])
     assert any(formula in c.content for c in chunks)
+
+
+# ------------------------------------------------------------------ token-budget mode
+
+
+def wordpiece_like(word: str) -> int:
+    """A stand-in for WordPiece: ~3 characters per token, and maths is far more expensive, which
+    is exactly why a character budget cannot protect a model's window."""
+    return max(1, len(word) // 3) + (2 * word.count("\\") if "$" in word else 0)
+
+
+@pytest.fixture
+def token_chunker():
+    return TextChunker(token_counter=wordpiece_like, max_tokens=60, overlap_tokens=10)
+
+
+def _tokens(chunk_text: str) -> int:
+    return sum(wordpiece_like(w) for w in chunk_text.split(" "))
+
+
+def test_token_mode_never_overflows_the_budget(token_chunker, make_section):
+    text = " ".join(
+        w if i % 7 else r"$\alpha_{i}\beta\gamma\delta$" for i, w in enumerate(words(600).split())
+    )
+    chunks = token_chunker.chunk_sections("p", [make_section(text)])
+    assert len(chunks) > 3
+    for c in chunks:
+        assert _tokens(c.content) <= 60, c.content
+
+
+def test_token_mode_beats_a_character_budget_on_math_heavy_text(make_section):
+    """The measured failure: the same characters, many more tokens when the text is LaTeX."""
+    math_heavy = " ".join([r"$\mathbf{x}\in\mathbb{R}^{d}$"] * 120)
+    by_chars = TextChunker(chunk_size=300, chunk_overlap=50).chunk_sections(
+        "p", [make_section(math_heavy)]
+    )
+    by_tokens = TextChunker(
+        token_counter=wordpiece_like, max_tokens=60, overlap_tokens=10
+    ).chunk_sections("p", [make_section(math_heavy)])
+    assert max(_tokens(c.content) for c in by_chars) > 60  # would be silently truncated
+    assert max(_tokens(c.content) for c in by_tokens) <= 60
+
+
+def test_token_mode_loses_no_text_and_overlaps(token_chunker, make_section):
+    text = words(400)
+    chunks = token_chunker.chunk_sections("p", [make_section(text)])
+    joined = chunks[0].content.split()
+    for nxt in chunks[1:]:
+        words_next = nxt.content.split()
+        assert words_next[0] in joined[-12:]  # the tail of the previous chunk is carried over
+        joined.extend(words_next)
+    assert set(text.split()) <= set(joined)
+    assert chunks[-1].content.split()[-1] == text.split()[-1]
+
+
+def test_token_mode_keeps_a_formula_whole_even_when_it_exceeds_the_budget(
+    token_chunker, make_section
+):
+    huge = "$" + r"\sum_{i}" * 40 + "$"  # far over 60 tokens on its own
+    text = f"{words(40)} {huge} {words(40)}"
+    chunks = token_chunker.chunk_sections("p", [make_section(text)])
+    assert sum(huge in c.content for c in chunks) >= 1
+    assert all(c.content.count("$") % 2 == 0 for c in chunks)
+
+
+def test_token_mode_rejects_an_overlap_that_is_not_smaller_than_the_budget():
+    with pytest.raises(ValueError):
+        TextChunker(token_counter=wordpiece_like, max_tokens=20, overlap_tokens=20)
+
+
+def test_the_section_path_spends_part_of_the_token_budget(make_section):
+    """The path is embedded with every chunk, so path + content must fit, not just the content."""
+    long_path = "Appendix > Details of the very long experimental protocol for the ablation"
+    section = make_section(words(500))
+    section.path = long_path
+    chunker = TextChunker(token_counter=wordpiece_like, max_tokens=60, overlap_tokens=10)
+    reserved = sum(wordpiece_like(w) for w in long_path.split()) + 2
+    for c in chunker.chunk_sections("p", [section]):
+        assert _tokens(c.content) + reserved <= 60, c.content

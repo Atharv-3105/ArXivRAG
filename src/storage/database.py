@@ -28,7 +28,7 @@ logger = structlog.get_logger(__name__)
 if not settings.DATABASE_URL:
     raise RuntimeError(
         "DATABASE_URL is not set. Expected e.g. "
-        "postgresql+asyncpg://USER:PASS@localhost:5433/arxivmind (see .env.example)"
+        "postgresql+asyncpg://USER:PASS@127.0.0.1:5433/arxivmind (see .env.example)"
     )
 
 engine = create_async_engine(
@@ -40,6 +40,10 @@ engine = create_async_engine(
     pool_timeout=30,
     pool_recycle=1800,
     pool_pre_ping=True,
+    # Establishing a connection must fail fast. "localhost" can resolve to ::1 first, and a
+    # published Docker port can silently drop IPv6: asyncpg then waited 21 s per new connection
+    # before falling back to IPv4, which stalled every request and failed /health/ready.
+    connect_args={"timeout": 5},
 )
 
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)

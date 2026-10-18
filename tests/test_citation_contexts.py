@@ -83,9 +83,7 @@ def test_context_rows_resolve_keys_to_arxiv_papers():
         Reference(ordinal=2, key="bib.bib3", text="Our own earlier version, arXiv:2401.00001v1"),
     ]
     contexts = [
-        CitationContext(
-            keys=["bib.bib1", "bib.bib2"], sentence="LoRA [1] fails badly.", anchor="S2"
-        ),
+        CitationContext(keys=["bib.bib1"], sentence="LoRA [1] fails badly.", anchor="S2"),
         CitationContext(keys=["bib.bib3"], sentence="Extending our prior work [3].", anchor="S1"),
         CitationContext(keys=["bib.nope"], sentence="Unknown key [9].", anchor=None),
     ]
@@ -98,3 +96,36 @@ def test_context_rows_resolve_keys_to_arxiv_papers():
         "anchor": "S2",
         "function": "critical",
     }
+
+
+def test_a_sentence_citing_a_group_is_background_not_a_stance():
+    """Measured on real text: only ~1 in 4 non-neutral labels was right, and the wrong ones were
+    almost all multi-citation sentences whose wording tripped a keyword rule."""
+    refs = [
+        Reference(ordinal=0, key="bib.bib1", text="Hu et al. LoRA. arXiv:2106.09685"),
+        Reference(ordinal=1, key="bib.bib2", text="Dettmers et al. QLoRA. arXiv:2305.14314"),
+    ]
+    group = CitationContext(
+        keys=["bib.bib1", "bib.bib2"],
+        sentence="Methods fail to scale when the data is incorrect [1, 2].",
+        anchor=None,
+    )
+    rows = context_rows("2401.00001v1", refs, [group])
+    assert {r["function"] for r in rows} == {"neutral"} and len(rows) == 2
+    alone = CitationContext(keys=["bib.bib1"], sentence="LoRA [1] fails to scale.", anchor=None)
+    assert context_rows("2401.00001v1", refs, [alone])[0]["function"] == "critical"
+
+
+def test_one_context_per_anchor_is_still_recognised_as_a_group():
+    """The parser emits a context per citation anchor, each with ONE key, sharing a sentence."""
+    refs = [
+        Reference(ordinal=0, key="bib.bib1", text="Hu et al. LoRA. arXiv:2106.09685"),
+        Reference(ordinal=1, key="bib.bib2", text="Dettmers et al. QLoRA. arXiv:2305.14314"),
+    ]
+    sentence = "Methods fail to scale when the data is incorrect (Hu, 2021; Dettmers, 2023)."
+    contexts = [
+        CitationContext(keys=["bib.bib1"], sentence=sentence, anchor=None),
+        CitationContext(keys=["bib.bib2"], sentence=sentence, anchor=None),
+    ]
+    rows = context_rows("2401.00001v1", refs, contexts)
+    assert [r["function"] for r in rows] == ["neutral", "neutral"]

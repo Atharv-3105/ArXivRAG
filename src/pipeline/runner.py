@@ -94,7 +94,7 @@ async def run_pipeline(
     # Pipeline components
     fetcher = ArxivFetcher()
     extractor = PaperExtractor(fetcher, cache)
-    chunker = TextChunker()
+    chunker = TextChunker(token_counter=vector_store.embedder.token_counter())
 
     logger.info("Pipeline started", run_id=run_id, query=query, max_papers=max_papers)
     status = "failed"
@@ -180,6 +180,16 @@ async def _process_paper(
             math_fidelity=doc.math_fidelity,
             parse_stats=doc.stats,
         )
+
+        async with get_async_session() as session:
+            superseded = await db_repo.other_versions(session, paper.arxiv_id)
+        for old_id in superseded:
+            # arXiv served a different version than the one stored. Keeping both would index the
+            # same passages twice, and they would be cited as two different sources.
+            async with get_async_session() as session:
+                await db_repo.delete_paper(session, old_id)
+            await vector_store.delete_paper(old_id)
+            logger.info("Older version superseded", old=old_id, new=paper.arxiv_id)
 
         if reingest and status is not None:
             # Only after the new parse succeeded, so a bad re-parse never destroys good data.

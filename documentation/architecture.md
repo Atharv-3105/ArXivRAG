@@ -33,8 +33,8 @@ Ops              CI gate (tests + offline eval + secret scan) · GHCR sha images
 | Paper metadata, parse provenance, `index_status` | Postgres `papers` | pipeline | no (source of truth) |
 | Chunk text + section path | Postgres `paper_chunks` | pipeline | no |
 | Equations (LaTeX), references | Postgres | pipeline | no |
-| Citation edges | Postgres `paper_citations` | pipeline, in the paper's own transaction | yes, from references |
-| Citation contexts (sentence + function) | Postgres `citation_contexts` | pipeline, same transaction | yes, by re-parsing cached HTML |
+| Citation edges | Postgres `paper_citations` | pipeline, in the paper's own transaction | yes: `python -m src.pipeline.rebuild_graph` (from stored references) |
+| Citation contexts (sentence + function) | Postgres `citation_contexts` | pipeline, same transaction | yes: `rebuild_graph` re-parses the cached HTML |
 | Influence (PageRank) | Postgres `paper_influence` | after each run / reindex | yes, recomputed |
 | Dense + BM25 vectors + payload | Qdrant | pipeline / `reindex` | **yes, from Postgres** |
 | Conversations, messages (per user), tutor session state, prompt versions, checks | Postgres | chat API, best effort | no |
@@ -58,6 +58,10 @@ Ops              CI gate (tests + offline eval + secret scan) · GHCR sha images
 | LangSmith for eval and A/B | Own harness: offline CI gate, live suites, A/B from the messages table | No cloud dependency or keys in CI; gates are deterministic | [0012](adr/0012-evaluation-and-observability.md) |
 | Airflow (Phase 2 of orchestration) | Scheduled GitHub Actions workflow | A daily batch needs no scheduler service on a free tier | [0013](adr/0013-deployment-and-operations.md) |
 | Configurable Ollama / OpenAI / Anthropic | A router over free providers (Groq, Gemini, Cerebras, OpenRouter, Ollama) plus optional Anthropic and an offline mock | Free-tier quotas are small, so one provider means downtime | [0004](adr/0004-llm-router.md) |
+
+## Paper versions
+
+One paper is stored under **one** version. arXiv serves the latest, so when a revision appears, ingesting it deletes the older version (Postgres cascade and Qdrant points) after the new parse succeeds; keeping both indexed the same passages twice, to be cited as two sources. Citations (`cited_base_id`) are version-free.
 
 ## Cross-cutting rules (enforced in code review)
 

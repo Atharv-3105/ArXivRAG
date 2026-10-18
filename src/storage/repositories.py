@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 
 import structlog
@@ -202,6 +203,14 @@ class PgRepo:
             .values(status=status, metrics=metrics, finished_at=datetime.now(UTC))
         )
         await session.commit()
+
+    async def other_versions(self, session: AsyncSession, arxiv_id: str) -> list[str]:
+        """Stored versions of the same paper under a different id ("2401.1v1" for "2401.1v2")."""
+        base = re.sub(r"v\d+$", "", arxiv_id)
+        rows = await session.execute(
+            select(Paper.arxiv_id).where(Paper.base_id == base, Paper.arxiv_id != arxiv_id)
+        )
+        return list(rows.scalars())
 
     async def delete_paper(self, session: AsyncSession, arxiv_id: str) -> None:
         """Delete a paper; chunks, equations and references go with it (ON DELETE CASCADE)."""

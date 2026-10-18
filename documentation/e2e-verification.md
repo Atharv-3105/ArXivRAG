@@ -51,3 +51,41 @@ A failed trailer check now logs the provider and the raw tail of the output, so 
 ## Not yet verified (blocked by quota, rerun when it resets)
 
 Tutor grading quality with a strong model after the fixes, completing all 4 tutor steps, review scheduling from graded answers, and the critic/synthesizer output-contract rates over many turns. `python -m src.eval.e2e --only tutor,critic,synthesizer` covers them.
+
+
+# Data pipeline audit (2026-10-19)
+
+The question this time was not "do the agents answer" but "is the data layer correct", checked against what is actually stored. Method: query Postgres and Qdrant, compare to the source HTML, and measure retrieval.
+
+## What was correct
+
+| Check | Result |
+|---|---|
+| Section structure of HTML-parsed papers | Real section titles, 605-716 distinct sections over 21 papers, no empty or generic titles. |
+| Reference extraction recall | 100%: every bibliography entry in the source HTML is stored (16 of 16 papers). |
+| Equation extraction | Matches the source's equation count (a consistent ratio against a raw class count that double-counts nested wrappers). |
+| Formulas split across chunks | 1 of 1,749 chunks (0.1%) before, 0 after. |
+| Postgres vs Qdrant | Chunk count equals point count, before and after re-ingest. |
+| Dead-letter queue | The one failed paper is a legitimate 404 for a PDF, parked with a retry count. |
+| Ingest idempotency and re-ingest | Re-ingest replaced papers in place, only after the new parse succeeded. |
+| Hybrid retrieval | Fusion beats either branch alone from rank 3 (table in ADR 0015). |
+| `/papers/missing` | After the graph rebuild it correctly lists the most-cited absent papers (Llama 3 x4, Qwen3 x3, LoRA x2), which guides corpus growth. |
+
+## Defects found and fixed
+
+| # | Defect | Fix |
+|---|---|---|
+| 1 | **32% of stored chunks overflowed MiniLM's 256-token window** and were silently truncated (about half of each lost). The earlier 800-character fix had not been measured. | Token-aware chunker with the model's own tokenizer, reserving the section path (ADR 0015). 0.1% overflow now. |
+| 2 | **The citation graph was empty (0 edges) although 300 references carried arXiv ids.** Edges and contexts were only written at ingest, papers stored before Phase 4 never got them, and `reindex` only re-embeds, despite the architecture doc saying "rebuildable". | `python -m src.pipeline.rebuild_graph`: edges from stored references, contexts by re-parsing cached HTML, then influence. 365 edges and 526 contexts. |
+| 3 | **A revised arXiv version was stored next to the old one** (3 of 21 papers duplicated: 24 rows, 215 duplicate chunks), so the same passage would be cited as two sources. | A new version supersedes older ones after the new parse succeeds; tested, including that a failed parse never deletes the old version. |
+| 4 | **5 papers had no parse provenance** (`parse_method` NULL, no equations, no references): PDF-era rows the app could not flag as degraded. | Re-ingest: arXiv now serves HTML for them, so all 21 are HTML with LaTeX math. |
+| 5 | **Every new database connection took 21 s** and `/health/ready` reported `database: timeout`, while Postgres was healthy. `localhost` resolved to IPv6 first and Docker dropped it. | `127.0.0.1` in the config, and a 5 s connect timeout in the engine. Runbook entry added. |
+| 6 | **Citation-function labels were wrong about 3 times in 4** on real sentences (a hand-judged sample of 24). The offline eval had hidden this, because it uses hand-made sentences. | A sentence that cites a group is labelled neutral. Precision on the same kind of sample rose to about 54% with 5% of contexts labelled. |
+
+## Still weak (recorded, not fixed)
+
+1. **`critical` is unreliable** (about 2 of 9 correct in the second sample). It fires on sentences describing a problem in the field that cite a paper as support, not on criticism of that paper. `builds_on` is mostly right (about 11 of 16). Options: an LLM classification pass at ingest, or not showing `critical` until it is validated. Features that say "who criticises X" inherit this.
+2. **Only 34% of references carry an arXiv id** (365 edges from 1,074 references). The rest cite venue papers; resolving them needs title or DOI matching (OpenAlex or Semantic Scholar are free), otherwise the graph stays sparse even with a large corpus.
+3. **41 chunks are under 150 characters**: the remainder at the end of a section. Harmless but low value; folding a short remainder into the previous chunk would remove them.
+4. **No retrieval regression test over the real corpus**: the question sets used here live in `.tmp`. They should become a checked-in eval (`src/eval/data`) that runs in the live suite.
+5. **The graph is still mostly outside the corpus**: all 365 edges point to papers not ingested, so PageRank and prerequisites are not meaningful until the foundation list is ingested.

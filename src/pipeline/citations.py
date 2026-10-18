@@ -7,6 +7,7 @@ never name a version.
 """
 
 import re
+from collections import defaultdict
 
 from src.pipeline.models import Reference
 
@@ -117,10 +118,20 @@ def context_rows(citing_id: str, references: list[Reference], contexts: list) ->
     resolve to no arXiv id are dropped: they cannot join the graph."""
     own = base_id(citing_id)
     by_key = {r.key: r for r in references if r.key}
+    cited_in: dict[str, set[str]] = defaultdict(set)  # sentence -> bibliography keys it cites
+    for ctx in contexts:
+        cited_in[ctx.sentence].update(ctx.keys)
     rows: list[dict] = []
     seen: set[tuple[str, str]] = set()
     for ctx in contexts:
-        function = citation_function(ctx.sentence)
+        # A stance can only be attributed to a work the sentence is about. A sentence that cites a
+        # group ("... (A, 2020; B, 2021; C, 2022)") is background, and keyword rules mislabelled
+        # it constantly: on real text only ~1 in 4 non-neutral labels was right, and the wrong ones
+        # were nearly all multi-citation sentences. The parser emits one context per citation
+        # anchor, so the group is found by counting the distinct keys per sentence.
+        function = (
+            citation_function(ctx.sentence) if len(cited_in[ctx.sentence]) == 1 else "neutral"
+        )
         for key in ctx.keys:
             ref = by_key.get(key)
             if ref is None:

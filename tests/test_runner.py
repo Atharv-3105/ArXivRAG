@@ -48,6 +48,7 @@ class World:
         self.repo = MagicMock()
         self.repo.upsert_paper_and_chunks = AsyncMock(side_effect=self._pg_upsert)
         self.repo.delete_paper = AsyncMock(side_effect=self._pg_delete)
+        self.repo.other_versions = AsyncMock(side_effect=self._other_versions)
         self.repo.log_failure_to_dlq = AsyncMock(side_effect=self._dlq)
         self.repo.get_index_status = AsyncMock(side_effect=self._status)
         self.repo.mark_indexed = AsyncMock(side_effect=self._mark)
@@ -115,6 +116,10 @@ class World:
         ]
         return ProcessedPaper(metadata=paper, sections=[], chunks=chunks)
 
+    async def _other_versions(self, session, arxiv_id):
+        base = arxiv_id.rsplit("v", 1)[0]
+        return [i for i in self.pg_ids if i.rsplit("v", 1)[0] == base and i != arxiv_id]
+
     async def _pg_delete(self, session, arxiv_id):
         self.events.append(f"pg_delete:{arxiv_id}")
         self.pg_ids.discard(arxiv_id)
@@ -148,7 +153,7 @@ def world(monkeypatch, tmp_path, make_paper):
     monkeypatch.setattr(runner, "PgRepo", lambda: w.repo)
     monkeypatch.setattr(runner, "ArxivFetcher", lambda: w.fetcher)
     monkeypatch.setattr(runner, "PaperExtractor", lambda fetcher, cache: w.extractor)
-    monkeypatch.setattr(runner, "TextChunker", lambda: w.chunker)
+    monkeypatch.setattr(runner, "TextChunker", lambda **_: w.chunker)
     monkeypatch.setattr(runner, "get_async_session", fake_session)
     return w
 
@@ -371,3 +376,35 @@ async def test_without_the_flag_nothing_is_deleted(world):
     await _run(world)
     world.repo.delete_paper.assert_not_awaited()
     world.vectors.delete_paper.assert_not_awaited()
+
+
+# ---------- a revised arXiv version supersedes the stored one ----------
+
+
+async def test_a_newer_version_replaces_the_stored_version_instead_of_duplicating_it(world):
+    """Found on real data: 3 papers were stored twice (v1 and the revision), so the same passages
+    were indexed twice and would have been cited as two different sources."""
+    world.papers = [world.papers[0].model_copy(update={"arxiv_id": "2401.00001v3"})]
+    world.pg_ids.add("2401.00001v1")
+    world.qdrant_ids.add("2401.00001v1")
+    m = await _run(world)  # note: no reingest flag
+    assert m.indexed == 3
+    assert world.pg_ids == world.qdrant_ids == {"2401.00001v3"}
+    assert "pg_delete:2401.00001v1" in world.events and "vec_delete:2401.00001v1" in world.events
+
+
+async def test_the_old_version_is_deleted_only_after_the_new_one_parsed(world):
+    world.papers = [world.papers[0].model_copy(update={"arxiv_id": "2401.00001v2"})]
+    world.pg_ids.add("2401.00001v1")
+    world.qdrant_ids.add("2401.00001v1")
+    world.extract_errors["2401.00001v2"] = ParseError("bad html", code="PARSE_HTML_ERROR")
+    await _run(world)
+    assert world.pg_ids == {"2401.00001v1"}  # a failed parse never destroys the stored paper
+    assert "pg_delete:2401.00001v1" not in world.events
+
+
+async def test_other_papers_are_never_treated_as_versions(world):
+    world.pg_ids.add("2401.00002v1")
+    world.papers = world.papers[:1]  # 2401.00001v1
+    await _run(world)
+    assert "2401.00002v1" in world.pg_ids

@@ -6,7 +6,9 @@ free host. The BM25 sparse encoder for hybrid search comes from the same library
 neural model at all (see ADR 0015 for the degraded mode when the dense model is unavailable).
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any
 
 import numpy as np
@@ -57,6 +59,25 @@ class EmbeddingService:
                 self.sparse_model_name, cache_dir=settings.MODEL_CACHE_DIR
             )
         return self._sparse
+
+    def token_counter(self) -> Callable[[str], int] | None:
+        """Tokens a whitespace-separated word costs in THIS model's window, or None if the
+        tokenizer is unavailable (the chunker then falls back to characters).
+
+        Word by word is exact for WordPiece: it splits on whitespace before anything else, so
+        a chunk's token count is the sum of its words' (plus the two special tokens)."""
+        try:
+            tokenizer = self.model.model.tokenizer
+            tokenizer.no_truncation()
+        except Exception as e:  # noqa: BLE001 - model files missing / offline: degrade, do not fail
+            logger.warning("Tokenizer unavailable; chunking by characters", error=str(e))
+            return None
+
+        @lru_cache(maxsize=200_000)
+        def count(word: str) -> int:
+            return max(len(tokenizer.encode(word, add_special_tokens=False).ids), 1)
+
+        return count
 
     @staticmethod
     def _normalise(vectors: np.ndarray) -> np.ndarray:
