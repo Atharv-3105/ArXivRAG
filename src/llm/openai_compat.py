@@ -19,6 +19,7 @@ from src.llm.base import (
     classify_status,
     parse_retry_after,
 )
+from src.llm.normalize import DegenerateOutput, OutputGuard, normalize_text
 
 
 class OpenAICompatAdapter:
@@ -101,7 +102,12 @@ class OpenAICompatAdapter:
             raise self._body_error(data)
 
         choice = data["choices"][0] if data["choices"] else {}
-        text = ((choice.get("message") or {}).get("content") or "").strip()
+        try:
+            text = normalize_text(((choice.get("message") or {}).get("content") or "").strip())
+        except DegenerateOutput as e:
+            raise ProviderError(
+                self.name, ErrorKind.INVALID_OUTPUT, f"degenerate output: {e}"
+            ) from e
         if choice.get("finish_reason") == "content_filter":
             raise ProviderError(self.name, ErrorKind.REFUSAL, "content filtered")
         if not text:
@@ -116,6 +122,7 @@ class OpenAICompatAdapter:
         )
 
     async def stream(self, request: LLMRequest) -> AsyncIterator[str | Usage]:
+        guard = OutputGuard()
         try:
             async with self._client.stream(
                 "POST", "/chat/completions", json=self._payload(request, True)
@@ -137,13 +144,19 @@ class OpenAICompatAdapter:
                         raise self._body_error(data)
                     for choice in data.get("choices") or []:
                         delta = (choice.get("delta") or {}).get("content")
-                        if delta:
-                            yield delta
+                        if delta and (clean := guard.feed(delta)):
+                            yield clean
                         if choice.get("finish_reason") == "content_filter":
                             raise ProviderError(self.name, ErrorKind.REFUSAL, "content filtered")
                     if data.get("usage"):
                         u = data["usage"]
                         yield Usage(u.get("prompt_tokens"), u.get("completion_tokens"))
+                if rest := guard.flush():
+                    yield rest
+        except DegenerateOutput as e:
+            raise ProviderError(
+                self.name, ErrorKind.INVALID_OUTPUT, f"degenerate output: {e}"
+            ) from e
         except httpx.TimeoutException as e:
             raise ProviderError(self.name, ErrorKind.TRANSIENT, f"timeout: {e}") from e
         except httpx.TransportError as e:

@@ -19,7 +19,11 @@ from src.llm.registry import build_adapter, resolve_specs
 async def _check(spec, stream: bool) -> str:
     adapter = build_adapter(spec, settings)
     request = LLMRequest(
-        [ChatMessage("user", "Reply with exactly: ok")], max_tokens=20, temperature=0.0
+        [ChatMessage("user", "Reply with exactly: ok")],
+        # Reasoning models (gpt-oss, nemotron) spend the budget on hidden thinking first, so a tiny
+        # limit reports "empty content" for a provider that is perfectly healthy.
+        max_tokens=300,
+        temperature=0.0,
     )
     started = time.perf_counter()
     try:

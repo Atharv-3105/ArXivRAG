@@ -118,11 +118,11 @@ class PgConversationStore:
             if await self._owner(session, conversation_id) != user_id:
                 await session.rollback()
                 raise NotFoundError(NOT_FOUND, code="CONVERSATION_NOT_FOUND")
-            await session.execute(
-                insert(Message).values(
-                    [{"conversation_id": conversation_id, **m} for m in messages]
-                )
-            )
+            # One INSERT per message, never one multi-row VALUES: SQLAlchemy takes the column set
+            # from the FIRST row, so a user message (3 keys) ahead of an assistant message (8 keys)
+            # silently dropped citations, agent, provider, prompt version and checks.
+            for m in messages:
+                await session.execute(insert(Message).values(conversation_id=conversation_id, **m))
             await session.execute(
                 update(Conversation)
                 .where(Conversation.id == conversation_id)

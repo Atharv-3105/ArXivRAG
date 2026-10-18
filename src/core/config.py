@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -112,9 +112,17 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-2.5-flash"
     CEREBRAS_API_KEY: SecretStr | None = None
     CEREBRAS_MODEL: str = "llama3.3-70b"
-    OPENROUTER_API_KEY: SecretStr | None = None
+    OPENROUTER_API_KEY: SecretStr | None = Field(
+        default=None, validation_alias=AliasChoices("OPENROUTER_API_KEY", "OPEN_ROUTER_API_KEY")
+    )  # both spellings are accepted: the provider's own name is "OpenRouter" or "Open Router"
     OPENROUTER_MODELS: list[str] = Field(
-        default=["z-ai/glm-5.2:free", "minimax/minimax-m3:free"],
+        default=[
+            # Explicit chat models only. Not "openrouter/free": that auto-router can pick a content
+            # safety classifier and answer a learner with "User Safety: safe".
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "nvidia/nemotron-3-ultra-550b-a55b:free",
+            "google/gemma-4-31b-it:free",
+        ],
         description="Free models tried in order; they share ONE account-wide rate limit",
     )
     OLLAMA_BASE_URL: str | None = Field(default=None, description="e.g. http://localhost:11434/v1")

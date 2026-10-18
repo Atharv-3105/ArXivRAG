@@ -113,3 +113,19 @@ describe("terrain", () => {
     expect(placeName("Training language models to follow instructions")).toBe("Training language models to…");
   });
 });
+
+describe("model output quirks", () => {
+  it("typesets \\(...\\) and \\[...\\] maths instead of printing raw TeX", () => {
+    const inline = renderBlocks("where \\(K_b\\) are the keys").map((b) => b.html).join("");
+    expect(inline).toContain("katex");
+    expect(inline).not.toContain("\\(");
+    const display = renderBlocks("the score is\n\n\\[ s_b = \\alpha \\cdot \\text{mean} \\]").map((b) => b.html).join("");
+    expect(display).toContain("katex-display");
+  });
+
+  it("links fullwidth 【n】 citations, including line references", () => {
+    const blocks = renderBlocks("It prunes blocks【1†L10-L14】 and scales【2】.", new Set([1, 2]));
+    expect(blocks[0].cites).toEqual([1, 2]);
+    expect(blocks[0].html).not.toContain("【");
+  });
+});

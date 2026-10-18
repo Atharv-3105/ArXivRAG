@@ -70,6 +70,9 @@ ML_LEXICON = frozenset(
     research study studies survey section figure table appendix contribution contributions
     read reading bayes statistics statistical math mathematics calculus derivative integral
     eigenvalue eigenvector expectation estimator estimation sample samples hypothesis
+    prefill context latency throughput cache sparse sparsity efficient efficiency lora qlora
+    adapter adapters rlhf dpo ppo moe transformer-xl mamba rnn lstm cnn gan vae sft
+    reasoning chain-of-thought cot rerank reranking ranker retriever benchmarking
     """.split()
 )
 _WORD = re.compile(r"[a-zA-Z][a-zA-Z\-]+")
@@ -85,7 +88,11 @@ def prompt_injection(text: str) -> bool:
 def has_ml_signal(text: str) -> bool:
     if vocab.extract_concepts(text, limit=1) or _ARXIV_ID.search(text):
         return True
-    words = {w.lower() for w in _WORD.findall(text)}
+    words: set[str] = set()
+    for w in _WORD.findall(text):
+        w = w.lower().strip("-")
+        words.add(w)
+        words.update(part for part in w.split("-") if part)  # "RBS-Attention" -> "attention"
     return bool(words & ML_LEXICON)
 
 

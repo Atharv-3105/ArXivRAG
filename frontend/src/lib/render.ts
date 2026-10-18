@@ -33,9 +33,23 @@ export function renderMath(tex: string, display: boolean): string {
   return katex.renderToString(tex, { displayMode: display, throwOnError: false, output: "html" });
 }
 
+// Models write maths as \(...\) and \[...\] as often as $...$; markdown would eat the backslash
+// ("\[" is an escaped bracket) and the formula would print as raw TeX. Rewrite to the dollar form.
+const TEX_DISPLAY = /\\\[([\s\S]+?)\\\]/g;
+const TEX_INLINE = /\\\((.+?)\\\)/g;
+// 【1】 / 【1†L3-L9】 -> " [1]" (the server normalises new answers; this repairs stored ones).
+const FULLWIDTH_CITE = /\s*【(\d+(?:\s*[,–-]\s*\d+)*)(?:†[^】]*)?】/g;
+
+export function normaliseModelText(text: string): string {
+  return text
+    .replace(TEX_DISPLAY, (_m, tex: string) => `$$${tex}$$`)
+    .replace(TEX_INLINE, (_m, tex: string) => `$${tex}$`)
+    .replace(FULLWIDTH_CITE, " [$1]");
+}
+
 export function renderBlocks(text: string, known?: Set<number>, notePrefix = "note"): Block[] {
   const math: { tex: string; display: boolean }[] = [];
-  const protectedText = text.replace(MATH, (_m, display: string, inline: string) => {
+  const protectedText = normaliseModelText(text).replace(MATH, (_m, display: string, inline: string) => {
     math.push({ tex: (display ?? inline).trim(), display: display !== undefined });
     return `@@M${math.length - 1}@@`;
   });

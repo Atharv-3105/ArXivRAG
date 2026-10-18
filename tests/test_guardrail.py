@@ -151,3 +151,36 @@ def test_injection_is_flagged_but_answered(api):
     ).json()
     assert r["guardrail"]["input"]["prompt_injection"] is True
     assert r["agent"] == "tutor"
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Explain how RBS-Attention speeds up long-context prefill",  # hyphenated paper name
+        "How does self-attention scale with sequence length?",
+        "What is multi-head attention?",
+        "Why does QLoRA use 4-bit quantization?",
+        "Summarise the CoLearn agentic tutor paper",
+        "What does speculative sampling change about decoding latency?",
+        "Compare RLHF and DPO",
+        "How are pre-training and fine-tuning different?",
+        "What is a KV-cache and why does it matter?",
+        "Why do mixture-of-experts models route tokens?",
+    ],
+)
+def test_real_ml_questions_are_not_refused(question):
+    assert guardrail.in_domain(question, [], None, None) is True
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "What's the weather in Pune tomorrow?",
+        "Give me a recipe for paneer butter masala",
+        "Who won the cricket match last night?",
+        "Write a poem about the ocean",
+        "Should I buy Bitcoin right now?",
+    ],
+)
+def test_clearly_off_topic_questions_are_still_refused(question):
+    assert guardrail.in_domain(question, [], None, None) is False

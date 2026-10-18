@@ -23,13 +23,13 @@ import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 import structlog
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 from src.agents import tutor as tutor_mod
 from src.agents.state import Citation, Source
@@ -54,7 +54,13 @@ Action = Literal["answer", "hint", "dont_understand", "skip", "review", "read", 
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(..., min_length=1, max_length=settings.MAX_MESSAGE_CHARS)
+    # Stripped before the length check: "   " is an empty message, not a (refused) question.
+    message: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True, min_length=1, max_length=settings.MAX_MESSAGE_CHARS
+        ),
+    ]
     conversation_id: UUID | None = None
     # Explicit tutor actions for UI buttons ("Hint", "I don't understand", "Next section", ...).
     # Free text works too; an explicit action just removes the guessing.
