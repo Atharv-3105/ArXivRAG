@@ -247,3 +247,16 @@ def test_ab_variant_is_recorded(api, services, monkeypatch):
     monkeypatch.setattr(settings, "PROMPT_AB_TEST", True)
     version = chat(api, "Explain how LoRA works")["prompt_version"]
     assert version in ("tutor_explain@v1", "tutor_explain@v2")
+
+
+def test_hints_are_a_budget_the_api_enforces(api):
+    """Found by the live suite: a client could ask for a 3rd hint (hints_used 3 of max 2)."""
+    first = chat(api, "Explain how LoRA works")
+    cid = first["conversation_id"]
+    for expected in range(1, settings.TUTOR_MAX_HINTS + 1):
+        hint = chat(api, "hint", cid)
+        assert hint["action"] == "hint" and hint["tutor"]["hints_used"] == expected
+    over = chat(api, "hint", cid)
+    assert over["prompt_version"].startswith("tutor_reexplain")  # a simpler explanation, not hint 3
+    assert over["tutor"]["hints_used"] <= settings.TUTOR_MAX_HINTS
+    assert over["tutor"]["pending_question"]  # the question is still open

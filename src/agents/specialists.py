@@ -86,12 +86,14 @@ async def generate(deps, system: str, sources, history, user_message, *, agent, 
     )
     splitter = TrailerSplitter() if trailer else None
     parts: list[str] = []
+    raw_tail = ""  # the last of what the model said, kept for the log if its trailer is unusable
     provider = model = ""
     async for event in deps.llm.stream(request):
         if event.kind == "start":
             provider, model = event.provider, event.model
             writer({"type": "provider", "provider": provider, "model": model})
         elif event.kind == "token":
+            raw_tail = (raw_tail + event.text)[-400:]
             visible = splitter.feed(event.text) if splitter else event.text
             if visible:
                 parts.append(visible)
@@ -102,6 +104,14 @@ async def generate(deps, system: str, sources, history, user_message, *, agent, 
             parts.append(tail)
             writer({"type": "token", "text": tail})
     meta = parse_meta(splitter.meta_text) if splitter and splitter.in_meta else None
+    if splitter and meta is None:
+        logger.warning(
+            "Model did not produce a usable trailer",
+            agent=agent,
+            provider=provider,
+            saw_delimiter=splitter.in_meta,
+            tail=raw_tail,
+        )
     return Generated("".join(parts), meta, provider, model)
 
 
@@ -331,6 +341,10 @@ def make_tutor(deps):
         ts = state.get("tutor_state") or {}
         plan = state.get("plan") or {}
         query = state["query"]
+        if action == "hint" and ts.get("hints_used", 0) >= settings.TUTOR_MAX_HINTS:
+            # Hints are a budget, and the UI hides the button at zero, but the API is open to any
+            # client: past the budget, explain the question more simply instead of leaking a 3rd.
+            action = "reexplain"
 
         if action == "skip":
             key = (ts.get("pending") or {}).get("answer_key")
