@@ -110,7 +110,17 @@ export function renderInline(text: string): string {
     .replace(/@@M(\d+)@@/g, (_m, i: string) => renderMath(math[Number(i)].tex, false));
 }
 
-const norm = (s: string) => s.replace(/\s+/g, " ").replace(/[*_`]/g, "").trim().toLowerCase();
+// A maths span (kept as it is) or a citation marker (removed): brackets inside a formula, like
+// $x[1]$, are indices, not citations.
+const MATH_OR_CITATION = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)|\s*\[\d+(?:\s*[,–-]\s*\d+)*\]/g;
+
+/** "…too large [1]. Why?" -> "…too large. Why?": a question read aloud has no footnote numbers. */
+export const stripCitations = (s: string) => s.replace(MATH_OR_CITATION, (_m, math?: string) => math ?? "");
+
+// Compare two renderings of the same text: one has $...$ around formulas and [n] markers, the
+// other (a block's plain text) has the bare TeX, so both are reduced to their words.
+const norm = (s: string) =>
+  stripCitations(s).replace(/\$/g, "").replace(/\s+/g, " ").replace(/[*_`]/g, "").trim().toLowerCase();
 
 /** Drop the block holding the tutor's pending question: the page shows it as the exercise. */
 export function withoutQuestion(blocks: Block[], question: string | null): Block[] {

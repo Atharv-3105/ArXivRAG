@@ -7,6 +7,7 @@ import type { CitingContext, MapEdge, MapNode, PaperDetail, Prerequisite, Studie
 import { CloseIcon } from "../components/Icons";
 import { categoryName, year } from "../lib/labels";
 import { layout, placeLabels, placeName, type Place } from "../lib/terrain";
+import { useTitle } from "../lib/useTitle";
 
 const W = 1200;
 const H = 820;
@@ -19,6 +20,7 @@ interface Detail {
 }
 
 export function MapPage() {
+  useTitle("Paper map");
   const [data, setData] = useState<{ nodes: MapNode[]; edges: MapEdge[] } | null>(null);
   const [studied, setStudied] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);

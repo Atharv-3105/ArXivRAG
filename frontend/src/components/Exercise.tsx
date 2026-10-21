@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import type { TutorAction, TutorView } from "../api/types";
-import { renderInline } from "../lib/render";
+import { renderInline, stripCitations } from "../lib/render";
 
 interface Props {
   tutor: TutorView;
@@ -25,7 +25,7 @@ export function Exercise({ tutor, busy, onSend }: Props) {
   return (
     <section className="exercise" aria-labelledby={`${fieldId}-title`}>
       <h2 id={`${fieldId}-title`}>Exercise {tutor.step || 1}</h2>
-      <p className="exercise-q" dangerouslySetInnerHTML={{ __html: renderInline(question) }} />
+      <p className="exercise-q" dangerouslySetInnerHTML={{ __html: renderInline(stripCitations(question)) }} />
       <form onSubmit={submit}>
         <label htmlFor={fieldId}>Your answer</label>
         <textarea

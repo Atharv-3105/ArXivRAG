@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseSSE } from "../api/stream";
-import { renderBlocks, renderInline, withoutQuestion } from "./render";
+import { renderBlocks, renderInline, stripCitations, withoutQuestion } from "./render";
 import { layout, placeLabels, placeName } from "./terrain";
 
 describe("renderBlocks", () => {
@@ -127,5 +127,24 @@ describe("model output quirks", () => {
     const blocks = renderBlocks("It prunes blocks【1†L10-L14】 and scales【2】.", new Set([1, 2]));
     expect(blocks[0].cites).toEqual([1, 2]);
     expect(blocks[0].html).not.toContain("【");
+  });
+});
+
+
+describe("the exercise question", () => {
+  const question =
+    "The original purpose of dividing by $\\sqrt{d_k}$ is to prevent dot products from growing too large [1]. What problem does this prevent?";
+
+  it("is hidden from the answer even when it contains maths and a citation marker", () => {
+    // Found in the browser: the question appeared twice, once in the answer and once as the exercise.
+    const answer = `Scaling matters.\n\n${question}`;
+    const blocks = renderBlocks(answer, new Set([1]));
+    expect(withoutQuestion(blocks, question)).toHaveLength(blocks.length - 1);
+  });
+
+  it("is shown without footnote numbers", () => {
+    expect(stripCitations(question)).not.toContain("[1]");
+    expect(stripCitations("Why? [2, 3] And [4-6] more.")).toBe("Why? And more.");
+    expect(stripCitations("Why is $x[1]$ small [2]?")).toBe("Why is $x[1]$ small?"); // indices in maths stay
   });
 });
