@@ -11,7 +11,7 @@ from typing import Any
 import structlog
 
 from src.agents.graph import ChatDeps, Retriever, build_graph
-from src.api.limits import AuthThrottle, SlidingWindowLimiter
+from src.api.limits import ActiveTurns, AuthThrottle, SlidingWindowLimiter
 from src.auth.seed import ensure_admin
 from src.auth.users import PgUserStore, UserStore
 from src.core.config import settings
@@ -46,6 +46,7 @@ class Services:
         default_factory=lambda: SlidingWindowLimiter(settings.RATE_LIMIT_PUBLIC_PER_MINUTE)
     )
     auth_throttle: AuthThrottle = field(default_factory=AuthThrottle)
+    active_turns: ActiveTurns = field(default_factory=ActiveTurns)
     graph: Any = None  # compiled LangGraph
     # Readiness probes: name -> async callable that raises when the dependency is down.
     probes: dict[str, Callable[[], Awaitable[Any]]] = field(default_factory=dict)

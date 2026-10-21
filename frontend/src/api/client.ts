@@ -130,6 +130,8 @@ export function friendlyError(code: string, message: string, retryAfter: number 
         return `${message.replace(/\s*Try again later\.?$/i, "").replace(/\.?$/, ".")}${later}`;
       }
       return `You are asking quickly.${retryAfter ? ` Try again in ${humanWait(retryAfter)}.` : " Wait a moment and try again."}`;
+    case "TURN_IN_PROGRESS":
+      return "Another reply is still being written in this conversation. Wait for it to finish.";
     case "DAILY_QUOTA_EXCEEDED":
       return "You have reached today's question limit. It resets tomorrow.";
     case "VALIDATION_ERROR":

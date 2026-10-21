@@ -136,6 +136,10 @@ describe("friendlyError", () => {
     expect(friendlyError("RATE_LIMITED", "Too many accounts created from this address. Try again later.", 3600)).toContain("about 60 minutes");
   });
 
+  it("explains a refused simultaneous turn", () => {
+    expect(friendlyError("TURN_IN_PROGRESS", "A reply is still being written")).toContain("Wait for it to finish");
+  });
+
   it("falls back to the server's message for codes it does not know", () => {
     expect(friendlyError("SOMETHING_NEW", "Specific server text")).toBe("Specific server text");
   });

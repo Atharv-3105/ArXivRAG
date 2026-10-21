@@ -40,7 +40,7 @@ from src.api.services import Services
 from src.auth.users import UserRecord
 from src.core import metrics
 from src.core.config import settings
-from src.core.exceptions import ArxivMindError, NotFoundError
+from src.core.exceptions import ArxivMindError, ConflictError, NotFoundError
 from src.core.logging import current_trace_id
 from src.memory import concepts as vocab
 from src.memory.manager import MemoryEvent
@@ -190,6 +190,16 @@ async def _reader_context(svc: Services, user_id: int, concepts: list[str]) -> d
     }
 
 
+def _claim(svc: Services, turn: Turn) -> None:
+    """One reply at a time per conversation (see ActiveTurns): a second, simultaneous turn would be
+    graded against the same pending question as the first."""
+    if not svc.active_turns.claim(turn.conversation_id):
+        raise ConflictError(
+            "A reply is still being written in this conversation. Wait for it to finish.",
+            code="TURN_IN_PROGRESS",
+        )
+
+
 def _trace_of(state: dict) -> dict:
     """How this answer was made, in a form that is small and stable enough to store: what the page
     shows under "How this was answered", and what an evaluation can query later."""
@@ -287,8 +297,12 @@ async def chat(
     svc: Services = Depends(services),
 ) -> ChatResponse:
     turn = await _prepare(svc, user, body)
-    state = await svc.graph.ainvoke(turn.graph_input)
-    await _finish(svc, turn, state)
+    _claim(svc, turn)
+    try:
+        state = await svc.graph.ainvoke(turn.graph_input)
+        await _finish(svc, turn, state)
+    finally:
+        svc.active_turns.release(turn.conversation_id)
     return ChatResponse(
         conversation_id=UUID(turn.conversation_id),
         answer=state.get("response", ""),
@@ -325,9 +339,10 @@ async def chat_stream(
     # Limits, auth and ownership fail as normal HTTP errors, before the stream starts.
     started = time.perf_counter()
     turn = await _prepare(svc, user, body)
+    _claim(svc, turn)
     trace_id = current_trace_id()
 
-    async def events() -> AsyncIterator[str]:
+    async def produce() -> AsyncIterator[str]:
         yield sse(
             "meta",
             {
@@ -399,6 +414,13 @@ async def chat_stream(
                 "timings": final.get("timings", {}),
             },
         )
+
+    async def events() -> AsyncIterator[str]:
+        try:
+            async for chunk in produce():
+                yield chunk
+        finally:  # runs on completion, on error and when the client disconnects
+            svc.active_turns.release(turn.conversation_id)
 
     return StreamingResponse(
         events(),

@@ -68,6 +68,37 @@ def client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+class ActiveTurns:
+    """At most one reply being written per conversation.
+
+    Two simultaneous turns (two tabs, a double submit, a client retry) both read the same tutor
+    state: both grade the same pending question, both credit the learner's mastery, and one
+    state write is lost. Measured: one answer sent twice was graded `incorrect` and `partial` at the
+    same time and counted twice. A single instance (ADR 0006) can refuse the second turn instead.
+
+    A claim also expires: if a client vanishes before its stream starts, the conversation must not
+    stay locked forever.
+    """
+
+    def __init__(self, ttl: float = 180.0, clock: Callable[[], float] = time.monotonic):
+        self.ttl = ttl
+        self._clock = clock
+        self._claims: dict[str, float] = {}
+
+    def claim(self, conversation_id: str) -> bool:
+        now = self._clock()
+        started = self._claims.get(conversation_id)
+        if started is not None and now - started < self.ttl:
+            return False
+        self._claims[conversation_id] = now
+        if len(self._claims) > 10_000:  # bound memory
+            self._claims = {k: v for k, v in self._claims.items() if now - v < self.ttl}
+        return True
+
+    def release(self, conversation_id: str) -> None:
+        self._claims.pop(conversation_id, None)
+
+
 class AuthThrottle:
     """Brute-force protection for sign-in and sign-up, in process memory like the chat limiter.
 
