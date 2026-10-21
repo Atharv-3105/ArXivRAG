@@ -89,3 +89,41 @@ The question this time was not "do the agents answer" but "is the data layer cor
 3. **41 chunks are under 150 characters**: the remainder at the end of a section. Harmless but low value; folding a short remainder into the previous chunk would remove them.
 4. **No retrieval regression test over the real corpus**: the question sets used here live in `.tmp`. They should become a checked-in eval (`src/eval/data`) that runs in the live suite.
 5. **The graph is still mostly outside the corpus**: all 365 edges point to papers not ingested, so PageRank and prerequisites are not meaningful until the foundation list is ingested.
+
+
+# Using the app (2026-10-21): frontend and backend bugs
+
+This round was driven by using the web app the way a learner does (desktop, a phone-sized viewport, dark and light, a dead server, an expired session) and by probing the API for validation, concurrency and token handling. Docker was not running, so everything here was found and fixed on the offline demo server and in tests; the real-stack items are listed at the end.
+
+## Defects found and fixed
+
+| # | Defect | Cause | Fix |
+|---|---|---|---|
+| 1 | **The tutor's exercise lost its formulas**: "if   was increased to be closer to  ?" | The fallback question was taken from text with every `$...$` blanked out (the masking used to ignore a `?` inside maths was also what it returned). | Find sentences in a masked copy, return the slice of the original. |
+| 2 | **A LaTeX command in the META trailer threw the whole trailer away**: no verdict, no next question, no answer key | `$\min(d, k)$` written with a single backslash is invalid JSON. Worse, `\frac`, `\text`, `\beta`, `\rho`, `\nu` are valid JSON escapes, so they "parsed" as a form feed, tab, backspace, ... and corrupted the formula silently. | A repair step that recognises LaTeX commands and leaves real escapes alone; trailing commas tolerated. 16 regression cases. |
+| 3 | **Answers cut off mid-sentence, with no question and no trailer** | Gemini 2.5's hidden "thinking" tokens count against `max_tokens` (measured: at the default level an answer was 262 visible characters, `finish_reason=length`). | `reasoning_effort=low` for Gemini 2.5 and gpt-oss only (complete answers, about 500 tokens); every `finish_reason=length` is now logged. |
+| 4 | An **"N/A" exercise** | With nothing in the sources to ask about, the model wrote `N/A` as the question. | Placeholder questions and answer keys are dropped. |
+| 5 | **Two simultaneous answers to one tutor question were both processed**: graded `incorrect` and `partial` at the same moment, both counted toward mastery, one state write lost | No per-conversation serialisation. | One reply at a time per conversation: the second gets `409 TURN_IN_PROGRESS` before any work starts; released on completion, error or disconnect; expires after 180 s. |
+| 6 | **No brute-force protection on sign-in** (flagged in the production review) | Nothing limited guessing. | Failed sign-ins are throttled per (email, IP), per IP, and per email (generous, for distributed guessing), checked before bcrypt runs; sign-ups capped per IP. An attacker cannot lock a victim out from another address. |
+| 7 | **Profile `goals` and `interests` accepted 1 MB strings** | Only the list length was bounded, and these strings go into every tutor prompt. | Goals 200 characters, interests 60, feedback concepts 60. |
+| 8 | **The exercise question appeared twice** (in the answer and as the exercise) whenever it held a formula or a `[n]` marker, and showed a raw `[1]` | The two renderings were compared as raw text. | Compare the words; strip footnote markers outside maths. |
+| 9 | **A cut connection looked like a finished answer** | A stream that ended without its `done` event was shown as complete. | Reported as interrupted, with Try again. |
+| 10 | **Mid-session failures were silent or misleading**: "The library is empty" when the request had failed; a rejected token threw you to the sign-in page with no explanation | Errors were swallowed into the empty state; no notice. | Loading, failed and empty are three different states; "Your session ended", then back to where you were. |
+| 11 | **Landing screen scrolled to the bottom on a phone**, hiding the heading; the keyboard opened on load | The auto-scroll effect ran on first render; the composer auto-focused on touch devices. | Only follow once a turn exists; no autofocus on touch. |
+| 12 | Enter confirmed an **input-method composition** and sent half a word; a long paste returned a bare 400 | No IME check, no length limit. | `isComposing` check; 4,000-character limit with a counter. |
+| 13 | The in-memory store (demo, tests) kept **no conversation titles** | `title` was never stored. | Stored. |
+| 14 | **Stored answers lost their route, timings and verdict** | Only some fields were persisted. | `messages.trace` stores the whole trace; "How this was answered" is complete after a reload. |
+| 15 | Tiny end-of-section chunks (41 of 2,505) | The remainder was mostly the previous chunk's overlap. | A few trailing words join the previous chunk. |
+
+## Added
+
+- **How this was answered**: for every answer, how the question was read, what was retrieved (and whether the citation graph re-ranked it), which model wrote it with which prompt version, the guardrail's verdict and measurements, the output checks, and time per step. This is the visible face of the agents.
+- Copy and Helpful / Not helpful (the existing `/feedback` endpoint, never used by the UI before), Stop, dark mode, a centred layout on wide screens, a Reading screen that accepts arXiv links, a show-password button.
+
+## Checked and found correct
+
+Concurrent registration of one email (one winner, the rest 409), email normalisation, malformed and oversized request bodies, SQL-injection-shaped and Unicode input, path traversal, security headers and CSP (`frame-ancestors 'none'`), CORS for an arbitrary origin, and JWT handling (`alg=none`, wrong key, wrong algorithm, expired, tampered payload, missing or malformed claims, deleted user): all rejected or handled with a 4xx.
+
+## Not verified on the real stack (Docker was down)
+
+The new `messages.trace` column migration on the real Postgres, the sign-in throttle against the real user store, and the rest of the tutor scenarios after the quota resets. `python -m src.eval.e2e` covers them once Docker is up.

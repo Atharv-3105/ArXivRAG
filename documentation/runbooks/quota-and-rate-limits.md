@@ -20,3 +20,10 @@ Also `arxivmind_rate_limited_total` rising.
 | Several instances | the per-minute window is per process (ADR 0006): move it to Redis before scaling out |
 
 **Verify:** 429s return to the expected background level.
+
+
+## Sign-in lockouts and one reply at a time
+
+- **`429` with "Too many failed sign-in attempts"**: failed sign-ins are counted per (email, IP) (`LOGIN_MAX_FAILURES`, default 8), per IP (`LOGIN_IP_MAX_FAILURES`, 40) and per email from anywhere (`LOGIN_EMAIL_MAX_FAILURES`, 100) over `LOGIN_LOCKOUT_SECONDS` (900). A success clears the pair. State is in process memory, so a restart clears it. **Behind a proxy run uvicorn with `--proxy-headers`**, otherwise every client shares the proxy's address and the per-IP limit locks everyone out together.
+- **Too many sign-ups**: `REGISTER_MAX_PER_IP_PER_HOUR` (20).
+- **`409 TURN_IN_PROGRESS`**: a second message arrived while a reply was still being written in the same conversation (two tabs, a double submit). The claim is released when the turn ends, fails or the client disconnects, and expires after 180 s.
