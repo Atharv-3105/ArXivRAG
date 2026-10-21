@@ -201,6 +201,7 @@ def _message(r: Message) -> dict:
         "agent": r.agent,
         "prompt_version": r.prompt_version,
         "checks": r.checks,
+        "trace": r.trace,
         "at": r.created_at.isoformat(),
     }
 
@@ -210,6 +211,7 @@ class InMemoryConversationStore:
         self.data: dict[str, list[dict]] = {}
         self.owners: dict[str, int] = {}
         self.states: dict[str, dict | None] = {}
+        self.titles: dict[str, str | None] = {}
 
     def _check(self, user_id: int, conversation_id: str) -> bool:
         owner = self.owners.get(conversation_id)
@@ -231,12 +233,13 @@ class InMemoryConversationStore:
         self._check(user_id, conversation_id)
         self.owners[conversation_id] = user_id
         self.states[conversation_id] = state
+        self.titles.setdefault(conversation_id, title)  # the first message names it, as in Postgres
         now = datetime.now(UTC)
         self.data.setdefault(conversation_id, []).extend({**m, "at": now} for m in messages)
 
     async def list_conversations(self, user_id, limit):
         ids = [cid for cid, owner in self.owners.items() if owner == user_id]
-        return [{"id": cid, "title": None} for cid in reversed(ids)][:limit]
+        return [{"id": cid, "title": self.titles.get(cid)} for cid in reversed(ids)][:limit]
 
     async def messages(self, user_id, conversation_id):
         if not self._check(user_id, conversation_id):

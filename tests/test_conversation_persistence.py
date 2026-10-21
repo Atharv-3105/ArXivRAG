@@ -54,6 +54,7 @@ async def test_assistant_message_keeps_its_provenance_columns(monkeypatch):
                 "agent": "tutor",
                 "prompt_version": "tutor_explain@v2",
                 "checks": {"grounded": True},
+                "trace": {"timings": {"route": 1.2}},
             },
         ],
         title="q",
@@ -67,5 +68,5 @@ async def test_assistant_message_keeps_its_provenance_columns(monkeypatch):
         if s.table.name == "messages"
     ]
     assistant = next(p for p in message_rows if p.get("role") == "assistant")
-    for column in ("intent", "citations", "provider", "agent", "prompt_version", "checks"):
+    for column in ("intent", "citations", "provider", "agent", "prompt_version", "checks", "trace"):
         assert assistant.get(column) is not None, f"{column} was not written"

@@ -186,6 +186,19 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_TTL_MINUTES: int = Field(default=60 * 24)
     BCRYPT_ROUNDS: int = Field(default=12, ge=4, le=16, description="Password hash cost (2^n)")
     ALLOW_REGISTRATION: bool = True
+    LOGIN_MAX_FAILURES: int = Field(
+        default=8, ge=1, description="Failed sign-ins per email from one IP before a lockout"
+    )
+    LOGIN_IP_MAX_FAILURES: int = Field(default=40, ge=1, description="Failed sign-ins per IP")
+    LOGIN_EMAIL_MAX_FAILURES: int = Field(
+        default=100,
+        ge=1,
+        description="Failed sign-ins per email from anywhere (distributed guessing)",
+    )
+    LOGIN_LOCKOUT_SECONDS: int = Field(
+        default=900, ge=1, description="The window failures count in"
+    )
+    REGISTER_MAX_PER_IP_PER_HOUR: int = Field(default=20, ge=1)
     ADMIN_EMAILS: list[str] = Field(default_factory=list)
     SEED_ADMIN_EMAIL: str | None = Field(
         default=None, description="Owner account created (or promoted) as admin at startup"

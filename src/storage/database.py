@@ -288,6 +288,7 @@ class Message(Base):
     agent: Mapped[str | None] = mapped_column(String(16))
     prompt_version: Mapped[str | None] = mapped_column(String(60))
     checks: Mapped[dict | None] = mapped_column(JSONB)
+    trace: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("NOW()")
     )

@@ -14,6 +14,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 import structlog
+from fastapi import Request
 
 from src.core import metrics
 from src.core.config import settings
@@ -47,6 +48,77 @@ class SlidingWindowLimiter:
         if len(self._hits) > 10_000:  # bound memory: forget idle keys
             self._hits = {k: v for k, v in self._hits.items() if v and now - v[-1] < self.window}
         return None
+
+    def peek(self, key: object) -> float | None:
+        """Like `hit`, without recording: seconds until allowed if the key is at its limit."""
+        now = self._clock()
+        hits = self._hits.get(key)
+        if not hits:
+            return None
+        while hits and now - hits[0] >= self.window:
+            hits.popleft()
+        return self.window - (now - hits[0]) if len(hits) >= self.limit else None
+
+    def reset(self, key: object) -> None:
+        self._hits.pop(key, None)
+
+
+def client_ip(request: Request) -> str:
+    """Behind a proxy, run uvicorn with --proxy-headers so client.host is the real client."""
+    return request.client.host if request.client else "unknown"
+
+
+class AuthThrottle:
+    """Brute-force protection for sign-in and sign-up, in process memory like the chat limiter.
+
+    Only FAILED sign-ins count, and they are counted three ways so that one limit cannot be used
+    against the others:
+      * per (email, IP): a person who forgot a password locks out only themselves, and an attacker
+        cannot lock a victim out from a different address;
+      * per IP: one machine trying many accounts;
+      * per email, high: guessing spread over many addresses.
+    The check runs BEFORE the password is verified, so a locked-out client also cannot use
+    bcrypt as a way to burn CPU. A success clears the (email, IP) count.
+    """
+
+    def __init__(self) -> None:
+        window = settings.LOGIN_LOCKOUT_SECONDS
+        self.pair = SlidingWindowLimiter(settings.LOGIN_MAX_FAILURES, window)
+        self.ip = SlidingWindowLimiter(settings.LOGIN_IP_MAX_FAILURES, window)
+        self.email = SlidingWindowLimiter(settings.LOGIN_EMAIL_MAX_FAILURES, 3600)
+        self.signups = SlidingWindowLimiter(settings.REGISTER_MAX_PER_IP_PER_HOUR, 3600)
+
+    def check_login(self, email: str, ip: str) -> None:
+        waits = [
+            self.pair.peek((email, ip)),
+            self.ip.peek(ip),
+            self.email.peek(email),
+        ]
+        wait = max((w for w in waits if w is not None), default=None)
+        if wait is not None:
+            metrics.RATE_LIMITED.labels("login").inc()
+            logger.warning("Sign-in locked out", ip=ip)
+            raise RateLimitError(
+                "Too many failed sign-in attempts. Try again later.",
+                retry_after=max(1, int(wait) + 1),
+            )
+
+    def login_failed(self, email: str, ip: str) -> None:
+        self.pair.hit((email, ip))
+        self.ip.hit(ip)
+        self.email.hit(email)
+
+    def login_succeeded(self, email: str, ip: str) -> None:
+        self.pair.reset((email, ip))
+
+    def check_register(self, ip: str) -> None:
+        wait = self.signups.hit(ip)
+        if wait is not None:
+            metrics.RATE_LIMITED.labels("register").inc()
+            raise RateLimitError(
+                "Too many accounts created from this address. Try again later.",
+                retry_after=max(1, int(wait) + 1),
+            )
 
 
 def utc_day_start(now: datetime) -> datetime:

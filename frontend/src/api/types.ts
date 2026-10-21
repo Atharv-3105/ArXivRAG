@@ -74,6 +74,17 @@ export interface TurnResult {
 
 export type FeedbackSignal = "helpful" | "not_helpful" | "understood" | "confused";
 
+/** What the server stores about how an answer was made (messages.trace). */
+export interface StoredTrace {
+  intent?: { intent: string | null; confidence: number | null; action: string | null };
+  timings?: Record<string, number>;
+  retrieval?: { passages: number; papers: number; graph: string | null };
+  model?: string | null;
+  verdict?: "correct" | "partial" | "incorrect" | null;
+  degraded?: string | null;
+  guardrail?: Guardrail;
+}
+
 export interface StoredMessage {
   role: "user" | "assistant";
   content: string;
@@ -83,6 +94,7 @@ export interface StoredMessage {
   provider?: string | null;
   prompt_version?: string | null;
   checks?: Record<string, boolean> | null;
+  trace?: StoredTrace | null;
   at: string;
 }
 

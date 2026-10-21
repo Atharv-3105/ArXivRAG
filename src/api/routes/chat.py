@@ -188,6 +188,35 @@ async def _reader_context(svc: Services, user_id: int, concepts: list[str]) -> d
     }
 
 
+def _trace_of(state: dict) -> dict:
+    """How this answer was made, in a form that is small and stable enough to store: what the page
+    shows under "How this was answered", and what an evaluation can query later."""
+    sources = state.get("sources") or []
+    guardrail = state.get("guardrail") or {}
+    return {
+        "intent": {
+            "intent": state.get("intent"),
+            "confidence": state.get("intent_confidence"),
+            "action": state.get("tutor_action"),
+        },
+        "timings": {k: round(float(v), 1) for k, v in (state.get("timings") or {}).items()},
+        "retrieval": {
+            "passages": len(sources),
+            "papers": len({str(s.get("paper_id", "")).split("v")[0] for s in sources}),
+            "graph": state.get("graph_status"),
+        },
+        "model": state.get("model"),
+        "verdict": state.get("verdict"),
+        "degraded": state.get("degraded"),
+        "guardrail": {
+            "approved": guardrail.get("approved", True),
+            "confidence": guardrail.get("confidence"),
+            "issues": guardrail.get("issues", []),
+            "metrics": guardrail.get("metrics", {}),
+        },
+    }
+
+
 async def _finish(svc: Services, turn: Turn, state: dict) -> None:
     """Save the turn, then hand the learning signal to the MemoryManager (not awaited)."""
     trace_id = current_trace_id()
@@ -206,6 +235,7 @@ async def _finish(svc: Services, turn: Turn, state: dict) -> None:
                 **(state.get("checks") or {}),
                 "guardrail_approved": (state.get("guardrail") or {}).get("approved", True),
             },
+            "trace": _trace_of(state),
         },
     ]
     _record_metrics(state)

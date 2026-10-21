@@ -223,4 +223,7 @@ ALTER TABLE conversations ADD COLUMN IF NOT EXISTS state JSONB;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS agent VARCHAR(16);
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS prompt_version VARCHAR(60);
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS checks JSONB;
+-- How the answer was made (route, retrieval, timings, verdict, guardrail): what "How this was
+-- answered" shows after a reload.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS trace JSONB;
 CREATE INDEX IF NOT EXISTS idx_messages_prompt ON messages(prompt_version) WHERE prompt_version IS NOT NULL;

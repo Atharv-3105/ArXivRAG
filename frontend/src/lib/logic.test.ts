@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { friendlyError, humanWait } from "../api/client";
 import { parseArxivId } from "./arxiv";
 import { buildTrace, checkLabel, formatMs } from "./trace";
 import type { Source } from "../api/types";
@@ -93,6 +94,11 @@ describe("buildTrace", () => {
     expect(t.notes).toEqual(["Degraded: no sources", "uncited claims"]);
   });
 
+  it("describes retrieval from the stored summary when the sources themselves are gone", () => {
+    const t = buildTrace({ agent: "tutor", retrieval: { passages: 10, papers: 9, graph: "ok" }, timings: { retrieve: 2 } });
+    expect(t.steps.find((s) => s.key === "retrieve")?.detail).toBe("10 passages from 9 papers, re-ranked by the citation graph");
+  });
+
   it("survives a stored message that has almost nothing", () => {
     const t = buildTrace({ agent: null });
     expect(t.steps.length).toBe(1); // just the writer
@@ -111,5 +117,32 @@ describe("formatting", () => {
 
   it("falls back to a readable label for an unknown check", () => {
     expect(checkLabel("some_new_check")).toBe("Some new check");
+  });
+});
+
+
+describe("friendlyError", () => {
+  it("never shows the server's log-style text for a model outage", () => {
+    const text = friendlyError("LLM_UNAVAILABLE", "No LLM provider could serve the request. Tried: gemini (rate_limited)", 42);
+    expect(text).not.toContain("Tried:");
+    expect(text).toContain("42 seconds");
+  });
+
+  it("tells a chat rate limit from a sign-in lockout and gives the wait in sensible units", () => {
+    expect(friendlyError("RATE_LIMITED", "Too many requests, slow down", 20)).toBe("You are asking quickly. Try again in 20 seconds.");
+    expect(friendlyError("RATE_LIMITED", "Too many failed sign-in attempts. Try again later.", 900)).toBe(
+      "Too many failed sign-in attempts. Try again in about 15 minutes.",
+    );
+    expect(friendlyError("RATE_LIMITED", "Too many accounts created from this address. Try again later.", 3600)).toContain("about 60 minutes");
+  });
+
+  it("falls back to the server's message for codes it does not know", () => {
+    expect(friendlyError("SOMETHING_NEW", "Specific server text")).toBe("Specific server text");
+  });
+
+  it("formats waits", () => {
+    expect(humanWait(5)).toBe("5 seconds");
+    expect(humanWait(120)).toBe("about 2 minutes");
+    expect(humanWait(7200)).toBe("about 2 hours");
   });
 });

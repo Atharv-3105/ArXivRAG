@@ -7,6 +7,7 @@ export interface TraceInput {
   agent: Agent | null;
   intent?: { intent: string; confidence: number; action: string | null } | null;
   sources?: Source[];
+  retrieval?: { passages: number; papers: number; graph: string | null } | null;
   timings?: Record<string, number> | null;
   checks?: Record<string, boolean> | null;
   guardrail?: Guardrail | null;
@@ -84,10 +85,14 @@ export function buildTrace(input: TraceInput): TraceView {
     const sure = Math.round(input.intent.confidence * 100);
     detail.route = `Read the question as ${words} (${sure}% sure)${input.intent.action ? `, step: ${input.intent.action}` : ""}`;
   }
-  if (input.sources) {
-    detail.retrieve = input.sources.length
-      ? `${input.sources.length} passages from ${papers.size} ${papers.size === 1 ? "paper" : "papers"}${
-          input.graphStatus === "ok" ? ", re-ranked by the citation graph" : ""
+  const retrieved = input.sources
+    ? { passages: input.sources.length, papers: papers.size }
+    : input.retrieval ?? null;
+  if (retrieved) {
+    const graph = input.graphStatus ?? input.retrieval?.graph;
+    detail.retrieve = retrieved.passages
+      ? `${retrieved.passages} passages from ${retrieved.papers} ${retrieved.papers === 1 ? "paper" : "papers"}${
+          graph === "ok" ? ", re-ranked by the citation graph" : ""
         }`
       : "No passages found";
   }

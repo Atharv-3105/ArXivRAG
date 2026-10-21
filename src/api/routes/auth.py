@@ -3,10 +3,11 @@
 import re
 
 import structlog
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field, field_validator
 
 from src.api.deps import services
+from src.api.limits import client_ip
 from src.api.services import Services
 from src.auth.security import (
     MAX_PASSWORD_BYTES,
@@ -60,9 +61,12 @@ def _token(user_id: int) -> Token:
 
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
-async def register(body: Registration, svc: Services = Depends(services)) -> Token:
+async def register(
+    request: Request, body: Registration, svc: Services = Depends(services)
+) -> Token:
     if not settings.ALLOW_REGISTRATION:
         raise ForbiddenError("Registration is closed", code="REGISTRATION_CLOSED")
+    svc.auth_throttle.check_register(client_ip(request))
     is_admin = body.email in {e.lower() for e in settings.ADMIN_EMAILS}
     user = await svc.users.create(
         body.email, hash_password(body.password), body.display_name, is_admin
@@ -72,9 +76,13 @@ async def register(body: Registration, svc: Services = Depends(services)) -> Tok
 
 
 @router.post("/login", response_model=Token)
-async def login(body: Credentials, svc: Services = Depends(services)) -> Token:
+async def login(request: Request, body: Credentials, svc: Services = Depends(services)) -> Token:
+    email, ip = body.email.strip().lower(), client_ip(request)
+    svc.auth_throttle.check_login(email, ip)  # before the password check: bcrypt is the cost
     user = await svc.users.by_email(body.email)
     # Same error and (via the dummy hash) same timing whether the email or the password is wrong.
     if not verify_password(body.password, user.password_hash if user else None) or user is None:
+        svc.auth_throttle.login_failed(email, ip)
         raise AuthError("Invalid email or password", code="INVALID_CREDENTIALS")
+    svc.auth_throttle.login_succeeded(email, ip)
     return _token(user.id)

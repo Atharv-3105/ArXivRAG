@@ -112,13 +112,24 @@ export const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body
  * provider could serve the request. Tried: gemini (rate_limited), ..."), so known codes get plain
  * wording and the unknown ones fall back to the server's text.
  */
+/** "45 seconds", "about 15 minutes": a wait a person can plan around. */
+export function humanWait(seconds: number): string {
+  if (seconds < 90) return `${Math.max(1, Math.round(seconds))} seconds`;
+  const minutes = Math.round(seconds / 60);
+  return minutes < 90 ? `about ${minutes} minutes` : `about ${Math.round(minutes / 60)} hours`;
+}
+
 export function friendlyError(code: string, message: string, retryAfter: number | null = null): string {
-  const wait = retryAfter ? ` Try again in about ${retryAfter} seconds.` : " Try again in a minute.";
+  const later = retryAfter ? ` Try again in ${humanWait(retryAfter)}.` : " Try again in a minute.";
   switch (code) {
     case "LLM_UNAVAILABLE":
-      return `The language models are busy or over their free quota right now.${wait}`;
+      return `The language models are busy or over their free quota right now.${later}`;
     case "RATE_LIMITED":
-      return `You are asking quickly.${retryAfter ? ` Try again in ${retryAfter} seconds.` : " Wait a moment and try again."}`;
+      // Two kinds: asking too fast (chat), and too many sign-in or sign-up attempts.
+      if (/sign-in|account/i.test(message)) {
+        return `${message.replace(/\s*Try again later\.?$/i, "").replace(/\.?$/, ".")}${later}`;
+      }
+      return `You are asking quickly.${retryAfter ? ` Try again in ${humanWait(retryAfter)}.` : " Wait a moment and try again."}`;
     case "DAILY_QUOTA_EXCEEDED":
       return "You have reached today's question limit. It resets tomorrow.";
     case "VALIDATION_ERROR":

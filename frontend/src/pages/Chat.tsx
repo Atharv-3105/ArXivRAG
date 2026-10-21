@@ -118,9 +118,25 @@ export function Chat() {
             agent: m.agent,
             citations: m.citations ?? [],
             sources: [],
+            verdict: m.trace?.verdict ?? null,
+            guardrail: m.trace?.guardrail ?? null,
             trace:
-              m.role === "assistant" && (m.provider || m.checks)
-                ? { agent: m.agent, provider: m.provider, promptVersion: m.prompt_version, checks: m.checks }
+              m.role === "assistant" && (m.provider || m.checks || m.trace)
+                ? {
+                    agent: m.agent,
+                    intent: m.trace?.intent?.intent
+                      ? { intent: m.trace.intent.intent, confidence: m.trace.intent.confidence ?? 1, action: m.trace.intent.action }
+                      : null,
+                    retrieval: m.trace?.retrieval,
+                    timings: m.trace?.timings,
+                    checks: m.checks,
+                    guardrail: m.trace?.guardrail,
+                    provider: m.provider,
+                    model: m.trace?.model,
+                    promptVersion: m.prompt_version,
+                    graphStatus: m.trace?.retrieval?.graph,
+                    degraded: m.trace?.degraded,
+                  }
                 : undefined,
           })),
         );
