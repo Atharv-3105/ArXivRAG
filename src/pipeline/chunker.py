@@ -10,6 +10,7 @@ from src.pipeline.models import Chunk, SectionContent
 _CHUNK_NAMESPACE = uuid.UUID("6f1d2c3e-5a7b-4c8d-9e0f-a1b2c3d4e5f6")
 
 MIN_SECTION_CHARS = 100
+TAIL_FOLD_TOKENS = 24  # a section's last few words join the previous chunk
 
 # An escaped dollar (`\$`, a literal price in prose) neither opens nor closes a span.
 _MATH = r"(?<!\\)\$\$.+?(?<!\\)\$\$|(?<!\\)\$.+?(?<!\\)\$"
@@ -97,7 +98,7 @@ class TextChunker:
         chunks: list[str] = []
         current: list[str] = []
         current_len = 0
-        fresh_words = 0  # tokens added since the last emitted chunk
+        fresh: list[str] = []  # words added since the last emitted chunk
 
         def emit() -> tuple[list[str], int]:
             """Close the current chunk; carry its tail (up to the overlap) into the next one."""
@@ -114,19 +115,26 @@ class TextChunker:
 
         for token in _TOKEN.findall(text):
             cost = self._cost(token)
-            if self._count and fresh_words and current_len + cost > limit:
+            if self._count and fresh and current_len + cost > limit:
                 # Token budget: close BEFORE the word that would overflow the model's window.
                 current, current_len = emit()
-                fresh_words = 0
+                fresh = []
             current.append(token)
             current_len += cost
-            fresh_words += 1
+            fresh.append(token)
 
             if not self._count and current_len >= self.chunk_size:
                 current, current_len = emit()  # character mode: close once the size is reached
-                fresh_words = 0
+                fresh = []
 
-        if fresh_words:  # remainder holds tokens that no emitted chunk contains yet
-            chunks.append(" ".join(current))
+        if fresh:  # the remainder holds words that no emitted chunk contains yet
+            fresh_cost = sum(self._cost(w) for w in fresh)
+            if self._count and chunks and fresh_cost <= TAIL_FOLD_TOKENS:
+                # A few words after the last full chunk: the remainder would be mostly the overlap
+                # again (a near-duplicate, tiny chunk). Append them to the previous chunk instead;
+                # the budget has margin for it (the model's window is larger than the limit).
+                chunks[-1] = chunks[-1] + " " + " ".join(fresh)
+            else:
+                chunks.append(" ".join(current))
 
         return chunks

@@ -264,3 +264,22 @@ def test_the_section_path_spends_part_of_the_token_budget(make_section):
     reserved = sum(wordpiece_like(w) for w in long_path.split()) + 2
     for c in chunker.chunk_sections("p", [section]):
         assert _tokens(c.content) + reserved <= 60, c.content
+
+
+def test_a_few_trailing_words_do_not_become_a_near_duplicate_chunk(token_chunker, make_section):
+    """41 of 2,505 real chunks were tiny remainders made mostly of the previous chunk's overlap."""
+    base = words(400)
+    for extra in (1, 3, 8):
+        text = base + " " + " ".join(["tail"] * extra)
+        chunks = token_chunker.chunk_sections("p", [make_section(text)])
+        assert chunks[-1].content.split()[-1] == "tail"  # nothing lost
+        assert chunks[-1].content.split().count("tail") == extra
+        assert all(_tokens(c.content) > 24 for c in chunks)  # no tiny chunk left over
+        first = chunks[-1].content.split()
+        assert len(first) > 12  # the last chunk is a real chunk, not just the overlap and a word
+
+
+def test_a_substantial_remainder_is_still_its_own_chunk(token_chunker, make_section):
+    text = words(400) + " " + " ".join(["fresh"] * 80)
+    chunks = token_chunker.chunk_sections("p", [make_section(text)])
+    assert chunks[-1].content.split().count("fresh") >= 40

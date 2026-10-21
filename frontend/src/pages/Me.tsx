@@ -164,11 +164,12 @@ export function Me() {
           placeholder="One goal per line, for example: understand RLHF well enough to implement it"
           onChange={(e) => setGoals(e.target.value)}
         />
+        <p className="hint">Up to 10 goals, one per line, 200 characters each.</p>
         <button
           className="btn-outline"
           type="button"
           onClick={() =>
-            patch({ goals: goals.split("\n").map((g) => g.trim()).filter(Boolean).slice(0, 10) }, "Goals saved")
+            patch({ goals: goals.split("\n").map((g) => g.trim().slice(0, 200)).filter(Boolean).slice(0, 10) }, "Goals saved")
           }
         >
           Save goals

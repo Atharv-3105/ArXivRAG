@@ -287,3 +287,33 @@ def test_account_deletion_requires_the_password_and_erases_everything(api, servi
     assert ok.status_code == 204
     assert api.get("/api/v1/me", headers=headers).status_code == 401  # token dies with the account
     assert services.conversations.owners == {} and services.profiles.mastery == {}
+
+
+# ---------------------------------------------------------------- profile text is bounded
+
+
+def test_profile_goals_and_interests_are_bounded(api):
+    """A 1 MB goal was accepted, and these strings are injected into every tutor prompt."""
+    headers = signup(api)
+    for body in (
+        {"goals": ["x" * 201]},
+        {"interests": ["y" * 61]},
+        {"goals": [""]},
+        {"goals": ["   "]},
+    ):
+        r = api.patch("/api/v1/me/profile", json=body, headers=headers)
+        assert r.status_code == 400, body
+    ok = api.patch(
+        "/api/v1/me/profile",
+        json={"goals": ["  understand RLHF  "], "interests": ["alignment"]},
+        headers=headers,
+    )
+    assert ok.status_code == 200 and ok.json()["profile"]["goals"] == ["understand RLHF"]
+
+
+def test_feedback_concepts_are_bounded(api):
+    headers = signup(api)
+    r = api.post(
+        "/api/v1/feedback", json={"signal": "helpful", "concepts": ["q" * 61]}, headers=headers
+    )
+    assert r.status_code == 400

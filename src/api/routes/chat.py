@@ -96,7 +96,9 @@ class Feedback(BaseModel):
     `helpful`/`not_helpful` rate the answer (recorded for evaluation, mastery untouched)."""
 
     signal: Literal["understood", "confused", "helpful", "not_helpful"]
-    concepts: list[str] = Field(default_factory=list, max_length=10)
+    concepts: list[Annotated[str, StringConstraints(max_length=60)]] = Field(
+        default_factory=list, max_length=10
+    )
     conversation_id: UUID | None = None
 
 

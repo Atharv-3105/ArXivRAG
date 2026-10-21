@@ -2,12 +2,12 @@
 
 from datetime import UTC, datetime
 from functools import partial
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, Query, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 from src.agents import tutor as tutor_mod
 from src.api.deps import current_user, services
@@ -40,13 +40,19 @@ class ProfileOut(BaseModel):
     locked_fields: list[str]
 
 
+# These strings go into the tutor's prompt on every turn, so their size is a cost, a latency and an
+# injection surface, not just storage: a 1 MB "goal" was accepted before they were bounded.
+Goal = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+Interest = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
+
+
 class ProfileUpdate(BaseModel):
     """Explicit values: applied, audited, and locked against inference until unlocked."""
 
     expertise_level: Literal["beginner", "intermediate", "advanced"] | None = None
     math_depth: Literal["light", "standard", "rigorous"] | None = None
-    goals: list[str] | None = Field(default=None, max_length=10)
-    interests: list[str] | None = Field(default=None, max_length=20)
+    goals: list[Goal] | None = Field(default=None, max_length=10)
+    interests: list[Interest] | None = Field(default=None, max_length=20)
     unlock: list[Lockable] = Field(default_factory=list)
 
 
