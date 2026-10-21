@@ -57,16 +57,69 @@ class TrailerSplitter:
         return "".join(self._meta)
 
 
+# LaTeX commands a model writes inside a JSON string ("question": "if $\min(d, k)$ ..."). JSON has
+# no \m, so the whole trailer used to fail to parse and the turn lost its verdict, next question and
+# answer key. Worse, \f \t \b \r \n ARE JSON escapes: "\frac" parsed fine as a form feed + "rac".
+_LATEX = frozenset(
+    """frac dfrac tfrac text textbf textit textrm mathbf mathrm mathcal mathbb mathit mathsf min max
+    sum prod int oint lim log ln exp sin cos tan sec alpha beta gamma delta epsilon varepsilon zeta
+    eta theta vartheta iota kappa lambda mu nu xi pi rho sigma tau upsilon phi varphi chi psi omega
+    Gamma Delta Theta Lambda Xi Pi Sigma Phi Psi Omega ll gg le leq ge geq ne neq approx sim simeq
+    equiv propto cdot times div pm mp in notin ni subset subseteq supset supseteq cup cap setminus
+    emptyset to rightarrow leftarrow Rightarrow Leftarrow leftrightarrow mapsto nabla partial infty
+    sqrt left right big Big bigg Bigg bar hat tilde vec dot ddot ldots cdots dots quad qquad begin
+    end operatorname argmin argmax top bot forall exists neg land lor langle rangle lceil rceil
+    lfloor rfloor mid parallel perp circ star ast bullet oplus otimes odot underbrace overbrace
+    underline overline boldsymbol mathop limits displaystyle tag label""".split()
+)
+_WORD = re.compile(r"[A-Za-z]+")
+_HEX4 = re.compile(r"[0-9a-fA-F]{4}")
+_TRAILING_COMMA = re.compile(r",\s*([}\]])")
+
+
+def repair_json_escapes(text: str) -> str:
+    """Double the backslash of every LaTeX command or other invalid escape inside the text, and
+    leave real JSON escapes (\\n, \\", \\\\, \\u00e9, ...) alone."""
+    out: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if ch != "\\":
+            out.append(ch)
+            i += 1
+            continue
+        nxt = text[i + 1] if i + 1 < n else ""
+        if nxt in ("\\", '"', "/"):  # a valid pair: keep both characters
+            out.append(ch + nxt)
+            i += 2
+            continue
+        if nxt == "u" and _HEX4.fullmatch(text[i + 2 : i + 6]):
+            out.append(text[i : i + 6])
+            i += 6
+            continue
+        word = _WORD.match(text, i + 1)
+        if word and word.group() not in _LATEX and word.group()[0] in "bfnrt":
+            out.append(ch)  # \n, \t ... followed by ordinary text: a genuine escape
+        else:
+            out.append("\\\\")  # a LaTeX command, or an escape JSON does not have
+        i += 1
+    return "".join(out)
+
+
 def parse_meta(text: str) -> dict | None:
-    """The JSON object in a trailer, tolerating code fences and chatter around it."""
+    """The JSON object in a trailer, tolerating code fences, chatter around it, and LaTeX."""
     text = re.sub(r"```(?:json)?", "", text or "").strip()
     start, end = text.find("{"), text.rfind("}")
     if start < 0 or end <= start:
         return None
+    candidate = repair_json_escapes(text[start : end + 1])
     try:
-        value = json.loads(text[start : end + 1])
+        value = json.loads(candidate)
     except ValueError:
-        return None
+        try:  # models sometimes leave a trailing comma: {"question": "Why?",}
+            value = json.loads(_TRAILING_COMMA.sub(r"\1", candidate))
+        except ValueError:
+            return None
     return value if isinstance(value, dict) else None
 
 

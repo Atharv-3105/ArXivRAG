@@ -318,3 +318,57 @@ async def test_build_router_with_keys_orders_by_task():
     assert [s.name for s in router.order_for("tutor")] == ["gemini", "groq"]
     assert not router.only_mock
     await router.aclose()
+
+
+# ---------------------------------------------------------------- reasoning budget and truncation
+
+
+async def test_reasoning_effort_is_sent_only_when_configured():
+    """Found on live Gemini: at its default thinking level, hidden reasoning consumed the whole
+    max_tokens budget and answers were cut off before their question and trailer."""
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json=ok_body())
+
+    await adapter(handler, reasoning_effort="low").complete(req())
+    await adapter(handler).complete(req())
+    assert bodies[0]["reasoning_effort"] == "low"
+    assert "reasoning_effort" not in bodies[1]
+
+
+def test_reasoning_effort_applies_only_to_models_that_accept_it():
+    cfg = Settings(
+        SECRET_KEY="k",
+        GEMINI_API_KEY="g",
+        GROQ_API_KEY="r",
+        GEMINI_MODEL="gemini-2.5-flash",
+        GROQ_MODEL="openai/gpt-oss-120b",
+    )
+    efforts = {s.name: s.reasoning_effort for s in resolve_specs(cfg)}
+    assert efforts["gemini"] == "low" and efforts["groq"] == "low"
+
+    other = Settings(
+        SECRET_KEY="k",
+        GEMINI_API_KEY="g",
+        GROQ_API_KEY="r",
+        GEMINI_MODEL="gemini-2.0-flash",
+        GROQ_MODEL="llama-3.3-70b",
+    )
+    efforts = {s.name: s.reasoning_effort for s in resolve_specs(other)}
+    assert efforts["gemini"] is None and efforts["groq"] is None  # would be a 400 on these models
+
+
+async def test_a_truncated_answer_is_logged_not_silent():
+    from structlog.testing import capture_logs
+
+    def handler(request):
+        body = ok_body("The answer stops mid-sen")
+        body["choices"][0]["finish_reason"] = "length"
+        return httpx.Response(200, json=body)
+
+    with capture_logs() as logs:
+        await adapter(handler).complete(req())
+    [entry] = [e for e in logs if e["event"] == "Answer cut off by max_tokens"]
+    assert entry["max_tokens"] == 50 and entry["provider"] == "p"

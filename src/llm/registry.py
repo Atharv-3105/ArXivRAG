@@ -42,6 +42,7 @@ class ProviderSpec(BaseModel):
     timeout: float | None = None
     stream_usage: bool = False
     supports_temperature: bool = True
+    reasoning_effort: str | None = None
     extra_headers: dict[str, str] = Field(default_factory=dict)
 
     def resolved_key(self) -> str | None:
@@ -66,6 +67,7 @@ def default_specs(cfg: Settings) -> list[ProviderSpec]:
                 rpm=30,
                 tpm=8000,
                 stream_usage=True,
+                reasoning_effort=cfg.GROQ_REASONING_EFFORT if "gpt-oss" in cfg.GROQ_MODEL else None,
             )
         )
     if key := _secret(cfg.GEMINI_API_KEY):
@@ -77,6 +79,7 @@ def default_specs(cfg: Settings) -> list[ProviderSpec]:
                 api_key=key,
                 rpm=10,
                 tpm=250_000,
+                reasoning_effort=cfg.GEMINI_REASONING_EFFORT if "2.5" in cfg.GEMINI_MODEL else None,
             )
         )
     if key := _secret(cfg.CEREBRAS_API_KEY):
@@ -155,6 +158,7 @@ def build_adapter(spec: ProviderSpec, cfg: Settings) -> LLMAdapter:
         extra_headers=spec.extra_headers,
         stream_usage=spec.stream_usage,
         supports_temperature=spec.supports_temperature,
+        reasoning_effort=spec.reasoning_effort,
         default_retry_after=cfg.LLM_DEFAULT_RETRY_AFTER_SECONDS,
     )
 

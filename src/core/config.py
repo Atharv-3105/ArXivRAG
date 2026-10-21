@@ -116,8 +116,16 @@ class Settings(BaseSettings):
     # and circuit breakers (src/llm/router.py). A provider is enabled by setting its key.
     GROQ_API_KEY: SecretStr | None = None
     GROQ_MODEL: str = "openai/gpt-oss-120b"
+    GROQ_REASONING_EFFORT: str | None = Field(
+        default="low", description="For gpt-oss models; hidden reasoning counts against max_tokens"
+    )
     GEMINI_API_KEY: SecretStr | None = None
     GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_REASONING_EFFORT: str | None = Field(
+        default="low",
+        description="For Gemini 2.5 models. At the default level hidden reasoning used the "
+        "whole token budget: answers were cut off before their question and trailer",
+    )
     CEREBRAS_API_KEY: SecretStr | None = None
     CEREBRAS_MODEL: str = "llama3.3-70b"
     OPENROUTER_API_KEY: SecretStr | None = Field(

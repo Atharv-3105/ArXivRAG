@@ -184,6 +184,28 @@ def _concept(*candidates: str | None) -> str | None:
     return None
 
 
+# What a model writes in the "question" field when it has none to ask (the sources do not cover
+# the topic): it must not become an exercise titled "N/A".
+_NO_QUESTION = frozenset(
+    {"n/a", "na", "none", "null", "nil", "no question", "no questions", "nothing", "-", "--", "?"}
+)
+
+
+def clean_meta(meta: dict | None) -> dict:
+    """The trailer with placeholder questions and answer keys removed, and strings stripped."""
+    cleaned = dict(meta or {})
+    for key in ("question", "answer_key"):
+        value = cleaned.get(key)
+        if isinstance(value, str):
+            value = value.strip()
+            if value.lower().strip(" .!") in _NO_QUESTION or not value:
+                value = None
+            cleaned[key] = value
+        elif value is not None and not isinstance(value, str):
+            cleaned[key] = None
+    return cleaned
+
+
 def _pending(question: str | None, answer_key: str | None) -> dict | None:
     return {"question": question, "answer_key": answer_key} if question else None
 
@@ -201,7 +223,7 @@ def transition(
     equation: dict | None = None,
 ) -> tuple[dict | None, list[dict], str | None]:
     """(new state, learning events, verdict) after the tutor's reply to `action`."""
-    meta = meta or {}
+    meta = clean_meta(meta)
     ts = dict(prev or {})
     events: list[dict] = []
     question = meta.get("question") or last_question(text)

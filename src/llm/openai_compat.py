@@ -9,6 +9,7 @@ import time
 from collections.abc import AsyncIterator
 
 import httpx
+import structlog
 
 from src.llm.base import (
     ErrorKind,
@@ -20,6 +21,8 @@ from src.llm.base import (
     parse_retry_after,
 )
 from src.llm.normalize import DegenerateOutput, OutputGuard, normalize_text
+
+logger = structlog.get_logger(__name__)
 
 
 class OpenAICompatAdapter:
@@ -33,6 +36,7 @@ class OpenAICompatAdapter:
         extra_headers: dict[str, str] | None = None,
         stream_usage: bool = True,
         supports_temperature: bool = True,
+        reasoning_effort: str | None = None,
         default_retry_after: float = 60.0,
         transport: httpx.AsyncBaseTransport | None = None,
     ):
@@ -40,6 +44,7 @@ class OpenAICompatAdapter:
         self.model = model
         self.stream_usage = stream_usage
         self.supports_temperature = supports_temperature
+        self.reasoning_effort = reasoning_effort
         self.default_retry_after = default_retry_after
         headers = {"Content-Type": "application/json", **(extra_headers or {})}
         if api_key:
@@ -61,11 +66,28 @@ class OpenAICompatAdapter:
         }
         if self.supports_temperature:
             body["temperature"] = request.temperature
+        if self.reasoning_effort:
+            # Hidden reasoning is billed against max_tokens: at a provider's default level the whole
+            # budget could go on thinking, cutting the answer off before its question and trailer.
+            body["reasoning_effort"] = self.reasoning_effort
         if request.json_mode:
             body["response_format"] = {"type": "json_object"}
         if stream and self.stream_usage:
             body["stream_options"] = {"include_usage": True}
         return body
+
+    def _note_truncation(
+        self, finish_reason: str | None, request: LLMRequest, chars: int = 0
+    ) -> None:
+        if finish_reason == "length":
+            logger.warning(
+                "Answer cut off by max_tokens",
+                provider=self.name,
+                model=self.model,
+                max_tokens=request.max_tokens,
+                visible_chars=chars,
+                reasoning_effort=self.reasoning_effort,
+            )
 
     def _error(self, resp: httpx.Response) -> ProviderError:
         kind = classify_status(resp.status_code)
@@ -110,6 +132,7 @@ class OpenAICompatAdapter:
             ) from e
         if choice.get("finish_reason") == "content_filter":
             raise ProviderError(self.name, ErrorKind.REFUSAL, "content filtered")
+        self._note_truncation(choice.get("finish_reason"), request, len(text))
         if not text:
             raise ProviderError(self.name, ErrorKind.EMPTY, "empty content")
         u = data.get("usage") or {}
@@ -148,6 +171,7 @@ class OpenAICompatAdapter:
                             yield clean
                         if choice.get("finish_reason") == "content_filter":
                             raise ProviderError(self.name, ErrorKind.REFUSAL, "content filtered")
+                        self._note_truncation(choice.get("finish_reason"), request)
                     if data.get("usage"):
                         u = data["usage"]
                         yield Usage(u.get("prompt_tokens"), u.get("completion_tokens"))

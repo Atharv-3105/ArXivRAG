@@ -384,3 +384,45 @@ def test_advisor_reply_cites_and_mentions_due_reviews():
     text = advisor.render(ranked, due=["lora"], weak=["rlhf"])
     assert "**Title p** (p)" in text and "[1]" in text
     assert "due for review: LoRA" in text and "quiz me" in text
+
+
+def test_a_question_keeps_its_maths():
+    """Found in the browser: the tutor's exercise read "if   was increased to be closer to  ?"
+    because the fallback question was taken from text with the formulas blanked out."""
+    text = r"Idea first. How would the parameters change if $r$ approaches $\min(d, k)$?"
+    assert questions(text) == [r"How would the parameters change if $r$ approaches $\min(d, k)$?"]
+    assert last_question(text) == questions(text)[0]
+
+
+def test_a_question_mark_inside_a_formula_still_does_not_count_or_split():
+    text = "We write $p(y?x)$ here. Why is $0.5$ fair? Say more."
+    assert questions(text) == ["Why is $0.5$ fair?"]
+
+
+@pytest.mark.parametrize("placeholder", ["N/A", "n/a", "None", "null", " - ", "No question.", ""])
+def test_a_placeholder_question_does_not_become_an_exercise(placeholder):
+    """Found in the browser: with nothing in the sources to ask about, the model wrote "N/A" as the
+    question and the page showed an Exercise titled N/A."""
+    state, _, _ = tutor.transition(
+        None,
+        "explain",
+        meta={"question": placeholder, "answer_key": "N/A"},
+        text="The sources do not cover this topic.",
+        topic="x",
+        concept=None,
+        sources=[],
+    )
+    assert not (state or {}).get("pending")
+
+
+def test_a_real_question_is_kept_and_stripped():
+    state, _, _ = tutor.transition(
+        None,
+        "explain",
+        meta={"question": "  Why does $r$ matter?  ", "answer_key": "low rank"},
+        text="Idea.",
+        topic="x",
+        concept=None,
+        sources=[],
+    )
+    assert state["pending"] == {"question": "Why does $r$ matter?", "answer_key": "low rank"}

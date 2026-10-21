@@ -31,13 +31,27 @@ SYNTH_SECTIONS = (
 )
 
 
-def _prose(text: str) -> str:
-    return _CODE.sub(" ", _MATH.sub(" ", text))
+def _masked(text: str) -> str:
+    """The text with every maths and code span replaced by filler of the SAME LENGTH, so a '?' or
+    '.' inside a formula is not mistaken for a sentence end and positions still line up."""
+
+    def blank(match: re.Match) -> str:
+        return "\x00" * len(match.group())
+
+    return _CODE.sub(blank, _MATH.sub(blank, text))
 
 
 def questions(text: str) -> list[str]:
-    """Sentences ending in '?' outside math and code."""
-    return [q.strip() for q in re.findall(r"[^.!?\n]*\?", _prose(text)) if len(q.strip()) > 3]
+    """Sentences ending in '?' outside math and code, returned as written (formulas included).
+
+    They were once returned from the masked text, so the tutor's pending question lost its maths:
+    "how would $r$ change?" became "how would   change?"."""
+    found: list[str] = []
+    for m in re.finditer(r"[^.!?\n]*\?", _masked(text)):
+        question = text[m.start() : m.end()].strip()
+        if len(question) > 3:
+            found.append(question)
+    return found
 
 
 def last_question(text: str) -> str | None:
