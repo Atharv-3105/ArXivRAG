@@ -1,25 +1,17 @@
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { api, describeError } from "../api/client";
+import { api } from "../api/client";
 import type { MasteryRow } from "../api/types";
 import { MasteryBar } from "../components/MasteryBar";
+import { ErrorNote, Loading } from "../components/Status";
 import { masteryWords, percent, relativeDay } from "../lib/labels";
+import { useResource } from "../lib/useResource";
+import { useTitle } from "../lib/useTitle";
 
 export function Reviews() {
-  const [due, setDue] = useState<MasteryRow[] | null>(null);
-  const [all, setAll] = useState<MasteryRow[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const due = useResource((signal) => api<MasteryRow[]>("/api/v1/me/reviews?limit=50", { signal }));
+  const all = useResource((signal) => api<MasteryRow[]>("/api/v1/me/mastery", { signal }));
   const navigate = useNavigate();
-
-  useEffect(() => {
-    Promise.all([api<MasteryRow[]>("/api/v1/me/reviews?limit=50"), api<MasteryRow[]>("/api/v1/me/mastery")]).then(
-      ([d, a]) => {
-        setDue(d);
-        setAll(a);
-      },
-      (e) => setError(describeError(e)),
-    );
-  }, []);
+  useTitle("Reviews");
 
   const review = (row: MasteryRow) =>
     navigate(`/?ask=${encodeURIComponent(`Quiz me on ${row.label}`)}&action=review`);
@@ -31,17 +23,15 @@ export function Reviews() {
         Short recall questions on concepts you studied, spaced out so they stick: each right answer
         pushes the next review further away.
       </p>
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
+
       <h2 className="section-title">Due now</h2>
-      {due === null ? (
-        <p className="muted">Loading…</p>
-      ) : due.length ? (
+      {due.loading ? (
+        <Loading label="Loading what is due" lines={2} />
+      ) : due.error ? (
+        <ErrorNote message={due.error} onRetry={due.reload} />
+      ) : due.data?.length ? (
         <ul className="rows">
-          {due.map((row) => (
+          {due.data.map((row) => (
             <li key={row.concept} className="row">
               <div className="row-main">
                 <div className="row-title">{row.label}</div>
@@ -61,9 +51,13 @@ export function Reviews() {
       )}
 
       <h2 className="section-title">Everything you have studied</h2>
-      {all.length ? (
+      {all.loading ? (
+        <Loading label="Loading your concepts" lines={3} />
+      ) : all.error ? (
+        <ErrorNote message={all.error} onRetry={all.reload} />
+      ) : all.data?.length ? (
         <ul className="rows">
-          {all.map((row) => (
+          {all.data.map((row) => (
             <li key={row.concept} className="row">
               <div className="row-main">
                 <div className="row-title">{row.label}</div>

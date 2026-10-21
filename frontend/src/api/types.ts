@@ -48,20 +48,31 @@ export interface Guardrail {
   metrics: Record<string, unknown>;
 }
 
+export interface Intent {
+  intent: string;
+  confidence: number;
+  agent: Agent;
+  action: string | null;
+}
+
 export interface TurnResult {
   answer: string;
   citations: Citation[];
   ungrounded: number[];
   degraded: string | null;
+  graph_status?: string;
   provider: string;
   model: string;
   agent: Agent | null;
   prompt_version: string | null;
   checks: Record<string, boolean>;
+  timings?: Record<string, number>;
   verdict: "correct" | "partial" | "incorrect" | null;
   tutor: TutorView | null;
   guardrail: Guardrail | null;
 }
+
+export type FeedbackSignal = "helpful" | "not_helpful" | "understood" | "confused";
 
 export interface StoredMessage {
   role: "user" | "assistant";
@@ -69,6 +80,9 @@ export interface StoredMessage {
   intent: string | null;
   citations: Citation[] | null;
   agent: Agent | null;
+  provider?: string | null;
+  prompt_version?: string | null;
+  checks?: Record<string, boolean> | null;
   at: string;
 }
 

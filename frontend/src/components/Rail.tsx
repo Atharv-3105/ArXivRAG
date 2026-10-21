@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink } from "react-router";
+import { NavLink, useLocation } from "react-router";
 import { api } from "../api/client";
 import type { Me, MasteryRow } from "../api/types";
 import { ChatIcon, MapIcon, ReadIcon, ReviewIcon } from "./Icons";
@@ -15,8 +15,13 @@ export function Rail() {
   const [due, setDue] = useState(0);
   const [initial, setInitial] = useState("");
 
+  const { pathname } = useLocation();
+
+  // Re-read on every screen change: finishing a review elsewhere must clear the badge.
   useEffect(() => {
     api<MasteryRow[]>("/api/v1/me/reviews").then((rows) => setDue(rows.length), () => {});
+  }, [pathname]);
+  useEffect(() => {
     api<Me>("/api/v1/me").then(
       (me) => setInitial((me.display_name || me.email).charAt(0).toUpperCase()),
       () => {},

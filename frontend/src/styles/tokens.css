@@ -14,6 +14,16 @@
   --notice: #8A5D0E;
   --notice-wash: #FBF3E2;
   --danger: #A12B2B;
+  --on-accent: #FFFFFF;
+  --on-danger: #FFFFFF;
+  --ok-wash: #E3F1EA;
+  --ok-ink: #1E5C3F;
+  --danger-wash: #F7E7E7;
+  --danger-ink: #8A2323;
+  --danger-line: #E3C3C3;
+  --scrim: rgba(27, 31, 42, 0.18);
+  --skeleton: #E6E9EE;
+  color-scheme: light;
 
   --map-ground: #E7ECE9;
   --map-contour: #BCCAC4;
@@ -24,6 +34,10 @@
   --map-trail: #2F6F9F;
   --map-critical: #C98A1B;
   --map-sheet: #FBFCFB;
+  --map-label: #5A6B68;
+  --map-line: #C6D1CD;
+  --map-rule: #DCE4E1;
+  --map-studied-deep: #0E4448;
 
   --serif: "STIX Two Text", "STIX Two", Georgia, serif;
   --sans: "Schibsted Grotesk", system-ui, sans-serif;
@@ -41,4 +55,84 @@
   --margin-col: 272px;
   --gutter: 64px;
   --radius: 8px;
+}
+
+/* Dark theme: follows the device unless the person chose one on the You screen. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  --paper: #14171F;
+  --paper-raised: #1C2029;
+  --ink: #E7E9EE;
+  --ink-muted: #9AA2B2;
+  --rule: #2C323F;
+  --rule-strong: #394152;
+  --accent: #7C97F2;
+  --accent-deep: #9DB2F7;
+  --accent-wash: #212A47;
+  --accent-track: #2A3150;
+  --notice: #E0B35A;
+  --notice-wash: #2E2615;
+  --danger: #E27A7A;
+  --on-accent: #0F1424;
+  --on-danger: #2A0F11;
+  --ok-wash: #16302A;
+  --ok-ink: #7FD1A8;
+  --danger-wash: #35191B;
+  --danger-ink: #F0A3A3;
+  --danger-line: #5A2A2D;
+  --scrim: rgba(0, 0, 0, 0.55);
+  --skeleton: #262C38;
+  --map-ground: #1B2423;
+  --map-contour: #34423F;
+  --map-ink: #DCE7E4;
+  --map-muted: #9BB0AB;
+  --map-studied: #4FB3B8;
+  --map-ring: #7E9794;
+  --map-trail: #6FB0E0;
+  --map-critical: #E0A34A;
+  --map-sheet: #1F2827;
+  --map-label: #9BB0AB;
+  --map-line: #34423F;
+  --map-rule: #2D3A38;
+  --map-studied-deep: #6CC7CB;
+  color-scheme: dark;
+}
+}
+:root[data-theme="dark"] {
+  --paper: #14171F;
+  --paper-raised: #1C2029;
+  --ink: #E7E9EE;
+  --ink-muted: #9AA2B2;
+  --rule: #2C323F;
+  --rule-strong: #394152;
+  --accent: #7C97F2;
+  --accent-deep: #9DB2F7;
+  --accent-wash: #212A47;
+  --accent-track: #2A3150;
+  --notice: #E0B35A;
+  --notice-wash: #2E2615;
+  --danger: #E27A7A;
+  --on-accent: #0F1424;
+  --on-danger: #2A0F11;
+  --ok-wash: #16302A;
+  --ok-ink: #7FD1A8;
+  --danger-wash: #35191B;
+  --danger-ink: #F0A3A3;
+  --danger-line: #5A2A2D;
+  --scrim: rgba(0, 0, 0, 0.55);
+  --skeleton: #262C38;
+  --map-ground: #1B2423;
+  --map-contour: #34423F;
+  --map-ink: #DCE7E4;
+  --map-muted: #9BB0AB;
+  --map-studied: #4FB3B8;
+  --map-ring: #7E9794;
+  --map-trail: #6FB0E0;
+  --map-critical: #E0A34A;
+  --map-sheet: #1F2827;
+  --map-label: #9BB0AB;
+  --map-line: #34423F;
+  --map-rule: #2D3A38;
+  --map-studied-deep: #6CC7CB;
+  color-scheme: dark;
 }

@@ -2,7 +2,10 @@ import { useMemo } from "react";
 import type { Agent, Citation, Guardrail, Source } from "../api/types";
 import { AGENT_LABEL, VERDICT_LABEL, year } from "../lib/labels";
 import { renderBlocks, withoutQuestion } from "../lib/render";
+import type { TraceInput } from "../lib/trace";
+import { AnswerActions } from "./AnswerActions";
 import { CheckIcon } from "./Icons";
+import { TracePanel } from "./TracePanel";
 
 export interface AnswerProps {
   id: string;
@@ -14,7 +17,12 @@ export interface AnswerProps {
   guardrail?: Guardrail | null;
   streaming?: boolean;
   error?: string | null;
+  stopped?: boolean;
   hideQuestion?: string | null;
+  trace?: TraceInput;
+  conversationId?: string;
+  concepts?: string[];
+  onRetry?: () => void;
 }
 
 /** One answer, typeset as a page: each paragraph's sources sit beside it in the margin. */
@@ -67,16 +75,35 @@ export function AnswerPage(props: AnswerProps) {
       ))}
       {streaming && !text && <p className="answer-wait">Reading the sources…</p>}
       {streaming && text && <span className="caret" aria-hidden="true" />}
+      {props.stopped && !streaming && (
+        <div className="answer-stopped" role="status">
+          <span>Stopped. This answer was not saved.</span>
+          {props.onRetry && (
+            <button className="btn-quiet" type="button" onClick={props.onRetry}>
+              Ask again
+            </button>
+          )}
+        </div>
+      )}
       {error && (
-        <p className="answer-error" role="alert">
-          {error}
-        </p>
+        <div className="answer-error" role="alert">
+          <p>{error}</p>
+          {props.onRetry && (
+            <button className="btn-outline" type="button" onClick={props.onRetry}>
+              Try again
+            </button>
+          )}
+        </div>
       )}
       {!streaming && guardrail?.approved && citations.length > 0 && (
         <p className="grounded">
           <CheckIcon size={16} /> Every claim cites one of these sources
         </p>
       )}
+      {!streaming && !error && text && (
+        <AnswerActions text={text} conversationId={props.conversationId} concepts={props.concepts} />
+      )}
+      {!streaming && !error && props.trace && <TracePanel input={props.trace} />}
     </article>
   );
 }

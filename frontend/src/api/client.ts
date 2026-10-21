@@ -33,6 +33,38 @@ export function setToken(token: string | null): void {
   window.dispatchEvent(new Event("auth:change"));
 }
 
+// Where the person was when their session ended (a rejected token), so the sign-in page can say
+// why they are there and send them back. sessionStorage: it should not outlive the tab.
+const EXPIRED_KEY = "arxivmind.expired";
+
+export function rememberExpired(path: string): void {
+  try {
+    sessionStorage.setItem(EXPIRED_KEY, path);
+  } catch {
+    /* storage unavailable: the notice is skipped, nothing else breaks */
+  }
+}
+
+/** The path the ended session was on, or null. Leaves it in place until `takeExpired`. */
+export function peekExpired(): string | null {
+  try {
+    return sessionStorage.getItem(EXPIRED_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function takeExpired(): string | null {
+  const path = peekExpired();
+  try {
+    sessionStorage.removeItem(EXPIRED_KEY);
+  } catch {
+    /* ignore */
+  }
+  // Only ever go back to a page of this app, never to a path someone planted in storage.
+  return path && path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/login") ? path : null;
+}
+
 export function authHeaders(): Record<string, string> {
   const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -51,7 +83,11 @@ export async function toApiError(response: Response): Promise<ApiError> {
     /* not JSON */
   }
   const retry = response.headers.get("retry-after");
-  if (response.status === 401) setToken(null);
+  // A 401 while holding a token means the session ended. (A wrong password at sign-in has no token.)
+  if (response.status === 401 && getToken()) {
+    rememberExpired(window.location.pathname + window.location.search);
+    setToken(null);
+  }
   return new ApiError(response.status, code, message, retry ? Number(retry) : null);
 }
 
@@ -71,12 +107,39 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body) });
 
+/**
+ * What to tell a person about a failure. The server's messages are written for logs ("No LLM
+ * provider could serve the request. Tried: gemini (rate_limited), ..."), so known codes get plain
+ * wording and the unknown ones fall back to the server's text.
+ */
+export function friendlyError(code: string, message: string, retryAfter: number | null = null): string {
+  const wait = retryAfter ? ` Try again in about ${retryAfter} seconds.` : " Try again in a minute.";
+  switch (code) {
+    case "LLM_UNAVAILABLE":
+      return `The language models are busy or over their free quota right now.${wait}`;
+    case "RATE_LIMITED":
+      return `You are asking quickly.${retryAfter ? ` Try again in ${retryAfter} seconds.` : " Wait a moment and try again."}`;
+    case "DAILY_QUOTA_EXCEEDED":
+      return "You have reached today's question limit. It resets tomorrow.";
+    case "VALIDATION_ERROR":
+      return "That could not be sent. Check the text and try again.";
+    case "INTERNAL_ERROR":
+      return "Something went wrong on our side. Try again.";
+    case "REGISTRATION_CLOSED":
+      return "Sign-ups are closed right now.";
+    case "INVALID_CREDENTIALS":
+      return "That email and password do not match an account.";
+    case "EMAIL_TAKEN":
+    case "USER_EXISTS":
+      return "An account with that email already exists. Sign in instead.";
+    default:
+      return message;
+  }
+}
+
 /** Readable text for an error shown to the user. */
 export function describeError(error: unknown): string {
-  if (error instanceof ApiError) {
-    if (error.status === 503 && error.retryAfter)
-      return `${error.message} Try again in ${error.retryAfter} seconds.`;
-    return error.message;
-  }
+  if (error instanceof ApiError) return friendlyError(error.code, error.message, error.retryAfter);
+  if (error instanceof DOMException && error.name === "AbortError") return "Cancelled.";
   return "The server could not be reached. Check your connection and try again.";
 }

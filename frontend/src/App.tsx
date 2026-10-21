@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router";
-import { getToken } from "./api/client";
+import { getToken, takeExpired } from "./api/client";
 import { Rail } from "./components/Rail";
 import { Chat } from "./pages/Chat";
 import { Login } from "./pages/Login";
@@ -45,7 +45,7 @@ export function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={signedIn ? <Navigate to="/" replace /> : <Login />} />
+        <Route path="/login" element={signedIn ? <Navigate to={takeExpired() ?? "/"} replace /> : <Login />} />
         <Route element={<Shell signedIn={signedIn} />}>
           <Route index element={<Chat />} />
           <Route path="/chat/:conversationId" element={<Chat />} />

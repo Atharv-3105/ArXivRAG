@@ -58,3 +58,45 @@ export const PlusIcon = ({ size }: P) => (
     <path d="M12 5v14M5 12h14" />
   </svg>
 );
+export const CopyIcon = ({ size }: P) => (
+  <svg {...base(size)}>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M5 15V6a2 2 0 0 1 2-2h8" />
+  </svg>
+);
+export const ThumbUpIcon = ({ size }: P) => (
+  <svg {...base(size)}>
+    <path d="M7 11v9H4v-9zM7 11l4-7c1.5 0 2.5 1 2.2 2.6L12.6 9H19a2 2 0 0 1 2 2.4l-1.2 6A2 2 0 0 1 17.8 19H7" />
+  </svg>
+);
+export const ThumbDownIcon = ({ size }: P) => (
+  <svg {...base(size)}>
+    <path d="M7 13V4H4v9zM7 13l4 7c1.5 0 2.5-1 2.2-2.6L12.6 15H19a2 2 0 0 0 2-2.4l-1.2-6A2 2 0 0 0 17.8 5H7" />
+  </svg>
+);
+export const StopIcon = ({ size }: P) => (
+  <svg {...base(size)}>
+    <rect x="6" y="6" width="12" height="12" rx="2" />
+  </svg>
+);
+export const ChevronIcon = ({ size }: P) => (
+  <svg {...base(size)}>
+    <path d="M9 6l6 6-6 6" />
+  </svg>
+);
+export const ArrowDownIcon = ({ size }: P) => (
+  <svg {...base(size)}>
+    <path d="M12 5v14M6 13l6 6 6-6" />
+  </svg>
+);
+export const EyeIcon = ({ size }: P) => (
+  <svg {...base(size)}>
+    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+export const MoonIcon = ({ size }: P) => (
+  <svg {...base(size)}>
+    <path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z" />
+  </svg>
+);

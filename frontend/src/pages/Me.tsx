@@ -3,6 +3,8 @@ import { api, describeError, json, setToken } from "../api/client";
 import type { MasteryRow, Me as MeData } from "../api/types";
 import { MasteryBar } from "../components/MasteryBar";
 import { percent } from "../lib/labels";
+import { applyTheme, getTheme, setTheme, type Theme } from "../lib/theme";
+import { useTitle } from "../lib/useTitle";
 
 const LEVELS = [
   ["beginner", "New to the field: define terms, use analogies"],
@@ -22,7 +24,16 @@ export function Me() {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [password, setPassword] = useState("");
-  const ids = { level: useId(), math: useId(), goals: useId(), password: useId() };
+  const [theme, setThemeState] = useState<Theme>(getTheme);
+  useTitle("You");
+  const ids = { level: useId(), math: useId(), goals: useId(), password: useId(), theme: useId() };
+
+  // A confirmation that stays forever stops being read.
+  useEffect(() => {
+    if (!status) return;
+    const t = window.setTimeout(() => setStatus(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [status]);
 
   const load = () =>
     Promise.all([api<MeData>("/api/v1/me"), api<MasteryRow[]>("/api/v1/me/mastery")]).then(
@@ -58,17 +69,25 @@ export function Me() {
   };
 
   const exportData = async () => {
-    const data = await api<unknown>("/api/v1/me/export");
-    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "arxivmind-export.json";
-    a.click();
-    URL.revokeObjectURL(url);
+    setError(null);
+    try {
+      const data = await api<unknown>("/api/v1/me/export");
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "arxivmind-export.json";
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus("Your data was downloaded");
+    } catch (e) {
+      setError(describeError(e));
+    }
   };
 
   const deleteAccount = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!window.confirm("Delete your account, history and progress? This cannot be undone.")) return;
+    setError(null);
     try {
       await api("/api/v1/me", { method: "DELETE", ...json({ password }) });
       setToken(null);
@@ -154,6 +173,25 @@ export function Me() {
         >
           Save goals
         </button>
+      </div>
+
+      <h2 className="section-title">Appearance</h2>
+      <div className="field">
+        <label htmlFor={ids.theme}>Theme</label>
+        <select
+          id={ids.theme}
+          value={theme}
+          onChange={(e) => {
+            const next = e.target.value as Theme;
+            setThemeState(next);
+            setTheme(next);
+            applyTheme(next);
+          }}
+        >
+          <option value="system">Follow my device</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
       </div>
 
       <h2 className="section-title">What you know</h2>
