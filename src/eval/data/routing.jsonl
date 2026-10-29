@@ -1,0 +1,45 @@
+{"query": "Explain how LoRA reduces the number of trainable parameters", "agent": "tutor"}
+{"query": "What is rotary position embedding?", "agent": "tutor"}
+{"query": "How does FlashAttention avoid materialising the attention matrix?", "agent": "tutor"}
+{"query": "Why does layer normalization help training?", "agent": "tutor"}
+{"query": "Teach me the intuition behind the KL penalty in RLHF", "agent": "tutor"}
+{"query": "Walk me through how DPO is derived", "agent": "tutor"}
+{"query": "I want to understand speculative decoding step by step", "agent": "tutor"}
+{"query": "Define perplexity", "agent": "tutor"}
+{"query": "Can you explain the difference between pre-norm and post-norm transformers?", "agent": "synthesizer"}
+{"query": "ELI5 mixture of experts", "agent": "tutor"}
+{"query": "What does the reparameterization trick in VAEs do?", "agent": "tutor"}
+{"query": "How is the KV cache used during inference?", "agent": "tutor"}
+{"query": "What are the weaknesses of the LoRA paper's evaluation?", "agent": "critic"}
+{"query": "Critique the baselines used in QLoRA", "agent": "critic"}
+{"query": "Is the Chinchilla scaling analysis statistically sound?", "agent": "critic"}
+{"query": "What limitations do the authors of Mamba acknowledge?", "agent": "critic"}
+{"query": "Are the results of this paper reproducible?", "agent": "critic"}
+{"query": "Point out flaws in the experimental design of DPO", "agent": "critic"}
+{"query": "What assumptions does the scaling laws paper make?", "agent": "critic"}
+{"query": "Is the ablation in FlashAttention convincing?", "agent": "critic"}
+{"query": "Compare LoRA and QLoRA", "agent": "synthesizer"}
+{"query": "RLHF vs DPO: which is better for alignment?", "agent": "synthesizer"}
+{"query": "How do state space models differ from transformers?", "agent": "synthesizer"}
+{"query": "Survey the approaches to long context in language models", "agent": "synthesizer"}
+{"query": "What is the consensus on chain-of-thought prompting?", "agent": "synthesizer"}
+{"query": "Contrast PPO and DPO for fine-tuning language models", "agent": "synthesizer"}
+{"query": "What are the trends in parameter-efficient fine-tuning?", "agent": "synthesizer"}
+{"query": "Do these papers contradict each other on scaling?", "agent": "synthesizer"}
+{"query": "What should I read next?", "agent": "advisor"}
+{"query": "Recommend papers on retrieval-augmented generation", "agent": "advisor"}
+{"query": "Which papers should I read before diving into diffusion models?", "agent": "advisor"}
+{"query": "Suggest a reading list for learning about alignment", "agent": "advisor"}
+{"query": "Where should I start with transformers?", "agent": "advisor"}
+{"query": "What are the prerequisites for understanding Mamba?", "agent": "advisor"}
+{"query": "Give me a learning path for reinforcement learning", "agent": "advisor"}
+{"query": "thanks!", "agent": "general"}
+{"query": "hello", "agent": "general"}
+{"query": "LoRA", "agent": "general"}
+{"query": "Tell me about the QLoRA paper", "agent": "general"}
+{"query": "Who wrote the attention is all you need paper?", "agent": "general"}
+{"query": "Summarize the Chinchilla paper", "agent": "general"}
+{"query": "quiz me", "agent": "tutor"}
+{"query": "walk me through 2106.09685", "agent": "tutor"}
+{"query": "explain equation 3 of 2305.14314", "agent": "tutor"}
+{"query": "Is RLHF better than supervised fine-tuning for helpfulness?", "agent": "synthesizer"}

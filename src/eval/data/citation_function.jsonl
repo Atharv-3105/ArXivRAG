@@ -1,0 +1,40 @@
+{"sentence": "However, LoRA [12] fails to capture full-rank updates when the task shifts strongly.", "label": "critical"}
+{"sentence": "The method of [4] suffers from training instability at large batch sizes.", "label": "critical"}
+{"sentence": "Their analysis is limited to linear models [7].", "label": "critical"}
+{"sentence": "We find that the gains reported in [3] do not hold under a fair tuning budget.", "label": "critical"}
+{"sentence": "The benchmark proposed in [9] is flawed because it leaks test data into training.", "label": "critical"}
+{"sentence": "Prior work [2] overlooks the cost of the retrieval step.", "label": "critical"}
+{"sentence": "As noted by [5], this estimator is biased for small samples.", "label": "critical"}
+{"sentence": "Contrary to [8], we observe no benefit from warmup.", "label": "critical"}
+{"sentence": "The approach of [6] cannot scale beyond a few thousand tokens.", "label": "critical"}
+{"sentence": "Unfortunately, [11] reports results on a single seed only.", "label": "critical"}
+{"sentence": "Our model outperforms BERT [5] on all GLUE tasks.", "label": "comparative"}
+{"sentence": "Unlike [6], we train the encoder end to end.", "label": "comparative"}
+{"sentence": "Compared with FlashAttention [3], our kernel uses less memory.", "label": "comparative"}
+{"sentence": "We achieve state-of-the-art accuracy, surpassing [14] by 2 points.", "label": "comparative"}
+{"sentence": "In contrast to [2], our method needs no labelled data.", "label": "comparative"}
+{"sentence": "This is competitive with the much larger model of [10].", "label": "comparative"}
+{"sentence": "Our results are on par with [7] at a fraction of the compute.", "label": "comparative"}
+{"sentence": "The proposed loss improves upon [3] in both precision and recall.", "label": "comparative"}
+{"sentence": "We follow the training setup of [7].", "label": "builds_on"}
+{"sentence": "Our encoder is based on the Transformer [1].", "label": "builds_on"}
+{"sentence": "We adopt the tokenizer from [4].", "label": "builds_on"}
+{"sentence": "Building on [9], we add a retrieval component.", "label": "builds_on"}
+{"sentence": "We extend the analysis of [2] to the multilingual setting.", "label": "builds_on"}
+{"sentence": "Following [15], we report exact match and F1.", "label": "builds_on"}
+{"sentence": "We use the AdamW optimizer [11] with cosine decay.", "label": "builds_on"}
+{"sentence": "The attention mechanism was introduced in [1].", "label": "builds_on"}
+{"sentence": "Our reward model is inspired by [13].", "label": "builds_on"}
+{"sentence": "We implement the kernel as proposed in [3].", "label": "builds_on"}
+{"sentence": "Large language models have grown rapidly in size [8, 9].", "label": "neutral"}
+{"sentence": "Retrieval-augmented generation has been applied to question answering [2].", "label": "neutral"}
+{"sentence": "Several works study the scaling of neural networks [5, 6, 7].", "label": "neutral"}
+{"sentence": "Diffusion models are a popular class of generative models [12].", "label": "neutral"}
+{"sentence": "See [4] for a survey of parameter-efficient methods.", "label": "neutral"}
+{"sentence": "This line of research dates back to [1].", "label": "neutral"}
+{"sentence": "Transformers now dominate natural language processing [3].", "label": "neutral"}
+{"sentence": "Other approaches include prefix tuning [6] and adapters [7].", "label": "neutral"}
+{"sentence": "However, we use a larger batch size than [2].", "label": "comparative"}
+{"sentence": "While [5] is elegant, its memory cost grows quadratically.", "label": "critical"}
+{"sentence": "We note that [9] evaluates only on English.", "label": "critical"}
+{"sentence": "Recent work questions the robustness of these results [10].", "label": "critical"}

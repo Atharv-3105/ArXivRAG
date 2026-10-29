@@ -1,0 +1,32 @@
+{"query": "low-rank adaptation of large language models", "relevant": ["2106.09685"]}
+{"query": "fine-tuning a 65B model on a single GPU with 4-bit quantization", "relevant": ["2305.14314"]}
+{"query": "attention is all you need", "relevant": ["1706.03762"]}
+{"query": "self-attention replaces recurrence for sequence transduction", "relevant": ["1706.03762"]}
+{"query": "bidirectional masked language model pretraining", "relevant": ["1810.04805"]}
+{"query": "language models are few-shot learners", "relevant": ["2005.14165"]}
+{"query": "optimizing preferences without a reward model or reinforcement learning", "relevant": ["2305.18290"]}
+{"query": "training language models to follow instructions with human feedback", "relevant": ["2203.02155"]}
+{"query": "IO-aware exact attention with tiling", "relevant": ["2205.14135"]}
+{"query": "rotary position embedding", "relevant": ["2104.09864"]}
+{"query": "compute-optimal number of tokens per parameter", "relevant": ["2203.15556", "2001.08361"]}
+{"query": "an image is worth 16x16 words", "relevant": ["2010.11929"]}
+{"query": "contrastive language image pretraining zero-shot transfer", "relevant": ["2103.00020"]}
+{"query": "denoising diffusion probabilistic models", "relevant": ["2006.11239"]}
+{"query": "selective state space models linear time sequence modeling", "relevant": ["2312.00752"]}
+{"query": "sparse mixture of experts switch routing trillion parameters", "relevant": ["2101.03961"]}
+{"query": "chain of thought prompting elicits reasoning", "relevant": ["2201.11903"]}
+{"query": "retrieval-augmented generation for knowledge-intensive NLP", "relevant": ["2005.11401"]}
+{"query": "proximal policy optimization clipped objective", "relevant": ["1707.06347"]}
+{"query": "adaptive moment estimation stochastic optimization", "relevant": ["1412.6980"]}
+{"query": "reducing internal covariate shift", "relevant": ["1502.03167"]}
+{"query": "deep residual learning with skip connections", "relevant": ["1512.03385"]}
+{"query": "layer normalization for recurrent networks", "relevant": ["1607.06450"]}
+{"query": "efficient estimation of word representations in vector space", "relevant": ["1301.3781"]}
+{"query": "generative adversarial nets minimax game", "relevant": ["1406.2661"]}
+{"query": "auto-encoding variational bayes reparameterization", "relevant": ["1312.6114"]}
+{"query": "distilling the knowledge in a neural network soft targets", "relevant": ["1503.02531"]}
+{"query": "power-law scaling of loss with model size and data", "relevant": ["2001.08361", "2203.15556"]}
+{"query": "speculative decoding with a draft model", "relevant": ["2211.17192"]}
+{"query": "paged attention memory management for LLM serving", "relevant": ["2309.06180"]}
+{"query": "how do adapters and low-rank updates save memory when fine-tuning", "relevant": ["2106.09685", "2305.14314"]}
+{"query": "reinforcement learning from human preferences for alignment", "relevant": ["2203.02155", "2305.18290", "1707.06347"]}

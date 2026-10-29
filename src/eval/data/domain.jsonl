@@ -1,0 +1,40 @@
+{"query": "Explain how LoRA works", "in_domain": true}
+{"query": "What is the capital of France?", "in_domain": false}
+{"query": "Write me a poem about the sea", "in_domain": false}
+{"query": "What's the weather like in Mumbai today?", "in_domain": false}
+{"query": "How do I bake sourdough bread?", "in_domain": false}
+{"query": "Who won the football match last night?", "in_domain": false}
+{"query": "Give me a recipe for pasta carbonara", "in_domain": false}
+{"query": "What is the best phone to buy this year?", "in_domain": false}
+{"query": "Translate 'good morning' into Spanish", "in_domain": false}
+{"query": "Tell me a joke", "in_domain": false}
+{"query": "How do I file my income tax return?", "in_domain": false}
+{"query": "What time is it in Tokyo?", "in_domain": false}
+{"query": "Recommend a good movie for tonight", "in_domain": false}
+{"query": "How does attention work in transformers?", "in_domain": true}
+{"query": "What is the difference between RLHF and DPO?", "in_domain": true}
+{"query": "Summarize 2106.09685", "in_domain": true}
+{"query": "Why does the loss diverge when the learning rate is too high?", "in_domain": true}
+{"query": "Which optimizer should I use for fine-tuning?", "in_domain": true}
+{"query": "Explain the results table in section 4", "in_domain": true}
+{"query": "What does the second equation mean?", "in_domain": true}
+{"query": "How do GPUs speed up training?", "in_domain": true}
+{"query": "What is a good dataset for sentiment classification?", "in_domain": true}
+{"query": "Is Mamba faster than a transformer on long sequences?", "in_domain": true}
+{"query": "hello", "in_domain": true}
+{"query": "thanks, that helped", "in_domain": true}
+{"query": "What are the ethical risks of large language models?", "in_domain": true}
+{"query": "How is perplexity computed?", "in_domain": true}
+{"query": "Can you explain backpropagation through time?", "in_domain": true}
+{"query": "What is the intuition behind variational inference?", "in_domain": true}
+{"query": "Why do bigger models generalize better?", "in_domain": true}
+{"query": "How are word vectors trained?", "in_domain": true}
+{"query": "What problem does batch normalization solve?", "in_domain": true}
+{"query": "Explain the proof of the universal approximation theorem", "in_domain": true}
+{"query": "How do diffusion models generate images?", "in_domain": true}
+{"query": "What is Bayes' rule?", "in_domain": true}
+{"query": "What does convergence mean for SGD?", "in_domain": true}
+{"query": "How do robots learn to grasp objects?", "in_domain": true}
+{"query": "What is the time complexity of self attention?", "in_domain": true}
+{"query": "Why is my code throwing a null pointer exception?", "in_domain": false}
+{"query": "Plan a 3 day trip to Goa", "in_domain": false}

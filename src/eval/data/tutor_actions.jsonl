@@ -1,0 +1,33 @@
+{"message": "Because the weight update has low intrinsic rank", "state": "pending", "expected": "grade"}
+{"message": "it freezes the pretrained weights and only trains A and B", "state": "pending", "expected": "grade"}
+{"message": "I think it reduces memory", "state": "pending", "expected": "grade"}
+{"message": "is it because the rank is small?", "state": "pending", "expected": "grade"}
+{"message": "No idea, maybe the learning rate?", "state": "pending", "expected": "grade"}
+{"message": "The KL term keeps the policy close to the reference model", "state": "pending", "expected": "grade"}
+{"message": "hint", "state": "pending", "expected": "hint"}
+{"message": "can I get a hint?", "state": "pending", "expected": "hint"}
+{"message": "give me a hint please", "state": "pending", "expected": "hint"}
+{"message": "another hint", "state": "pending", "expected": "hint"}
+{"message": "I don't understand", "state": "pending", "expected": "reexplain"}
+{"message": "I'm confused", "state": "pending", "expected": "reexplain"}
+{"message": "this is too complicated, simpler please", "state": "pending", "expected": "reexplain"}
+{"message": "can you explain it again differently", "state": "session", "expected": "reexplain"}
+{"message": "you lost me", "state": "session", "expected": "reexplain"}
+{"message": "skip", "state": "pending", "expected": "skip"}
+{"message": "I give up", "state": "pending", "expected": "skip"}
+{"message": "show me the answer", "state": "pending", "expected": "skip"}
+{"message": "next", "state": "reading", "expected": "read_next"}
+{"message": "continue", "state": "reading", "expected": "read_next"}
+{"message": "move on to the next section", "state": "reading", "expected": "read_next"}
+{"message": "quiz me", "state": "none", "expected": "review"}
+{"message": "test me on LoRA", "state": "none", "expected": "review", "concepts": ["lora"]}
+{"message": "what's due for review?", "state": "none", "expected": "review"}
+{"message": "walk me through 2106.09685", "state": "none", "expected": "read"}
+{"message": "let's read the paper 2305.14314 together", "state": "none", "expected": "read"}
+{"message": "explain equation 3 of 2106.09685", "state": "none", "expected": "equation"}
+{"message": "what does eq. (7) in 1706.03762 mean?", "state": "none", "expected": "equation"}
+{"message": "What is RLHF?", "state": "pending", "expected": null, "concepts": ["rlhf"], "intent": "learn"}
+{"message": "Compare DPO and PPO?", "state": "pending", "expected": null, "concepts": ["dpo", "ppo"], "intent": "synthesize"}
+{"message": "Explain how LoRA works", "state": "none", "expected": null}
+{"message": "hint", "state": "none", "expected": null}
+{"message": "I don't understand attention", "state": "none", "expected": null}

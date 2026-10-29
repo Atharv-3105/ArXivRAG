@@ -1,0 +1,10 @@
+{
+  "_comment": "Offline gates for CI. Set from the plan's targets and the first measured baseline (documentation/eval/offline-report.md), never lowered to make a change pass: lowering one needs a note in the report explaining why.",
+  "routing.agent_accuracy": 0.85,
+  "domain.false_refusal_rate_max": 0.05,
+  "domain.off_topic_recall": 0.8,
+  "tutor.action_accuracy": 0.9,
+  "citation_function.macro_f1": 0.7,
+  "guardrail.decision_accuracy": 0.9,
+  "templates.valid": 1.0
+}
